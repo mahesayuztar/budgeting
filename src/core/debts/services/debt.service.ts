@@ -1,0 +1,164 @@
+import "server-only";
+
+import { Prisma, type DebtStatus, type DebtType } from "@prisma/client";
+import { prisma } from "@/src/core/lib/prisma";
+import { NotFoundError } from "@/src/core/lib/errors";
+import { toAmount } from "@/src/core/lib/money";
+import { toDateOnly } from "@/src/core/lib/date";
+import type {
+  DebtInput,
+  DebtListParams,
+  DebtPaymentInput,
+} from "../validators/debt.validator";
+
+export type DebtPaymentDTO = {
+  uuid: string;
+  amount: number;
+  paidAt: string;
+  note: string | null;
+};
+
+export type DebtDTO = {
+  uuid: string;
+  type: DebtType;
+  party: string;
+  amount: number;
+  paidAmount: number;
+  remaining: number;
+  note: string | null;
+  dueDate: string | null;
+  status: DebtStatus;
+  payments: DebtPaymentDTO[];
+};
+
+const select = {
+  uuid: true,
+  type: true,
+  party: true,
+  amount: true,
+  note: true,
+  dueDate: true,
+  status: true,
+  payments: {
+    select: { uuid: true, amount: true, paidAt: true, note: true },
+    orderBy: { paidAt: "desc" },
+  },
+} satisfies Prisma.DebtSelect;
+
+type DebtRow = Prisma.DebtGetPayload<{ select: typeof select }>;
+
+function toDTO(row: DebtRow): DebtDTO {
+  const amount = toAmount(row.amount);
+  const paidAmount = row.payments.reduce(
+    (total, payment) => total + toAmount(payment.amount),
+    0,
+  );
+
+  return {
+    uuid: row.uuid,
+    type: row.type,
+    party: row.party,
+    amount,
+    paidAmount,
+    remaining: Math.max(amount - paidAmount, 0),
+    note: row.note,
+    dueDate: row.dueDate ? row.dueDate.toISOString().slice(0, 10) : null,
+    status: row.status,
+    payments: row.payments.map((payment) => ({
+      uuid: payment.uuid,
+      amount: toAmount(payment.amount),
+      paidAt: payment.paidAt.toISOString().slice(0, 10),
+      note: payment.note,
+    })),
+  };
+}
+
+class DebtService {
+  async list(userId: number, params: DebtListParams = {}): Promise<DebtDTO[]> {
+    const rows = await prisma.debt.findMany({
+      where: {
+        userId,
+        ...(params.type ? { type: params.type } : {}),
+        ...(params.status ? { status: params.status } : {}),
+      },
+      select,
+      orderBy: [{ status: "asc" }, { dueDate: "asc" }, { id: "desc" }],
+    });
+
+    return rows.map(toDTO);
+  }
+
+  async create(userId: number, input: DebtInput): Promise<DebtDTO> {
+    const row = await prisma.debt.create({
+      data: {
+        userId,
+        type: input.type,
+        party: input.party,
+        amount: new Prisma.Decimal(input.amount),
+        note: input.note?.trim() || null,
+        dueDate: input.dueDate ? toDateOnly(input.dueDate) : null,
+      },
+      select,
+    });
+
+    return toDTO(row);
+  }
+
+  /**
+   * Pembayaran dan perubahan status harus atomik: kalau tidak, dua pembayaran
+   * bersamaan bisa membuat hutang lunas tapi status tetap OPEN.
+   */
+  async addPayment(
+    userId: number,
+    uuid: string,
+    input: DebtPaymentInput,
+  ): Promise<DebtDTO> {
+    const debt = await this.mustOwn(userId, uuid);
+
+    const row = await prisma.$transaction(async (tx) => {
+      await tx.debtPayment.create({
+        data: {
+          debtId: debt.id,
+          amount: new Prisma.Decimal(input.amount),
+          paidAt: toDateOnly(input.paidAt),
+          note: input.note?.trim() || null,
+        },
+      });
+
+      const totals = await tx.debtPayment.aggregate({
+        where: { debtId: debt.id },
+        _sum: { amount: true },
+      });
+
+      const paid = toAmount(totals._sum.amount);
+      const settled = paid >= toAmount(debt.amount);
+
+      return tx.debt.update({
+        where: { id: debt.id },
+        data: {
+          status: settled ? "PAID" : "OPEN",
+          settledAt: settled ? new Date() : null,
+        },
+        select,
+      });
+    });
+
+    return toDTO(row);
+  }
+
+  async remove(userId: number, uuid: string): Promise<void> {
+    const debt = await this.mustOwn(userId, uuid);
+    await prisma.debt.delete({ where: { id: debt.id } });
+  }
+
+  private async mustOwn(userId: number, uuid: string) {
+    const debt = await prisma.debt.findFirst({
+      where: { uuid, userId },
+      select: { id: true, amount: true },
+    });
+    if (!debt) throw new NotFoundError("Data hutang/piutang tidak ditemukan.");
+    return debt;
+  }
+}
+
+export const debtService = new DebtService();

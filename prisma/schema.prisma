@@ -1,0 +1,128 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+}
+
+enum DebtType {
+  RECEIVABLE // piutang - orang lain berhutang kepada kita
+  PAYABLE // hutang - kita berhutang kepada orang lain
+}
+
+enum DebtStatus {
+  OPEN
+  PAID
+}
+
+model User {
+  id              Int       @id @default(autoincrement())
+  uuid            String    @unique @default(uuid())
+  username        String    @unique
+  name            String
+  email           String    @unique
+  password        String
+  emailVerifiedAt DateTime?
+  isActive        Boolean   @default(true)
+  lastLoginAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+
+  sessions     Session[]
+  categories   Category[]
+  transactions Transaction[]
+  debts        Debt[]
+}
+
+model Session {
+  id        Int      @id @default(autoincrement())
+  tokenHash String   @unique
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ipAddress String?
+  userAgent String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Category {
+  id        Int             @id @default(autoincrement())
+  uuid      String          @unique @default(uuid())
+  userId    Int
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  type      TransactionType
+  icon      String?
+  color     String?
+  createdAt DateTime        @default(now())
+
+  transactions Transaction[]
+
+  @@unique([userId, name, type])
+  @@index([userId])
+}
+
+model Transaction {
+  id         Int             @id @default(autoincrement())
+  uuid       String          @unique @default(uuid())
+  userId     Int
+  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  categoryId Int?
+  category   Category?       @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  type       TransactionType
+  amount     Decimal         @db.Decimal(14, 2)
+  note       String?
+  occurredAt DateTime        @db.Date
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  @@index([userId, occurredAt])
+  @@index([userId, type])
+  @@index([categoryId])
+}
+
+model Debt {
+  id        Int        @id @default(autoincrement())
+  uuid      String     @unique @default(uuid())
+  userId    Int
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      DebtType
+  party     String
+  amount    Decimal    @db.Decimal(14, 2)
+  note      String?
+  dueDate   DateTime?  @db.Date
+  status    DebtStatus @default(OPEN)
+  settledAt DateTime?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  payments DebtPayment[]
+
+  @@index([userId, status])
+  @@index([userId, type])
+}
+
+model DebtPayment {
+  id        Int      @id @default(autoincrement())
+  uuid      String   @unique @default(uuid())
+  debtId    Int
+  debt      Debt     @relation(fields: [debtId], references: [id], onDelete: Cascade)
+  amount    Decimal  @db.Decimal(14, 2)
+  paidAt    DateTime @db.Date
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@index([debtId])
+}
