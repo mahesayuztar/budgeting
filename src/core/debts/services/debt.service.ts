@@ -5,6 +5,13 @@ import { prisma } from "@/src/core/lib/prisma";
 import { NotFoundError } from "@/src/core/lib/errors";
 import { toAmount } from "@/src/core/lib/money";
 import { toDateOnly } from "@/src/core/lib/date";
+import {
+  buildPage,
+  decodeCursor,
+  DEFAULT_PAGE_SIZE,
+  encodeCursor,
+  type Page,
+} from "@/src/core/lib/pagination";
 import type {
   DebtInput,
   DebtListParams,
@@ -74,18 +81,36 @@ function toDTO(row: DebtRow): DebtDTO {
 }
 
 class DebtService {
-  async list(userId: number, params: DebtListParams = {}): Promise<DebtDTO[]> {
+  async list(
+    userId: number,
+    params: DebtListParams = {},
+  ): Promise<Page<DebtDTO>> {
+    const limit = params.limit ?? DEFAULT_PAGE_SIZE;
+    const cursorId = decodeCursorId(params.cursor);
+
     const rows = await prisma.debt.findMany({
       where: {
         userId,
         ...(params.type ? { type: params.type } : {}),
         ...(params.status ? { status: params.status } : {}),
+        ...(params.q
+          ? {
+              OR: [
+                { party: { contains: params.q, mode: "insensitive" } },
+                { note: { contains: params.q, mode: "insensitive" } },
+              ],
+            }
+          : {}),
+        ...(cursorId === null ? {} : { id: { lt: cursorId } }),
       },
-      select,
-      orderBy: [{ status: "asc" }, { dueDate: "asc" }, { id: "desc" }],
+      select: { ...select, id: true },
+      // Diurutkan murni `id desc` supaya cursor cukup satu kolom. Mengurutkan
+      // per status/jatuh tempo akan membuat keyset butuh perbandingan majemuk.
+      orderBy: { id: "desc" },
+      take: limit + 1,
     });
 
-    return rows.map(toDTO);
+    return buildPage(rows, limit, toDTO, (row) => encodeCursor([row.id]));
   }
 
   async create(userId: number, input: DebtInput): Promise<DebtDTO> {
@@ -159,6 +184,14 @@ class DebtService {
     if (!debt) throw new NotFoundError("Data hutang/piutang tidak ditemukan.");
     return debt;
   }
+}
+
+function decodeCursorId(cursor?: string): number | null {
+  const parts = decodeCursor(cursor);
+  if (!parts || parts.length !== 1) return null;
+
+  const id = Number(parts[0]);
+  return Number.isNaN(id) ? null : id;
 }
 
 export const debtService = new DebtService();

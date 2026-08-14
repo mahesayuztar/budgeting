@@ -53,7 +53,7 @@ async function monthlyReport(
 ) {
   const [summary, transactions] = await Promise.all([
     reportService.getMonthlySummary(userId, year, month),
-    transactionService.list(userId, { year, month, limit: 200 }),
+    transactionService.listAllInPeriod(userId, year, month),
   ]);
 
   return {

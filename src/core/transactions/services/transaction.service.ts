@@ -5,6 +5,13 @@ import { prisma } from "@/src/core/lib/prisma";
 import { NotFoundError } from "@/src/core/lib/errors";
 import { toAmount } from "@/src/core/lib/money";
 import { monthRange, toDateOnly, yearRange } from "@/src/core/lib/date";
+import {
+  buildPage,
+  decodeCursor,
+  DEFAULT_PAGE_SIZE,
+  encodeCursor,
+  type Page,
+} from "@/src/core/lib/pagination";
 import type {
   TransactionInput,
   TransactionListParams,
@@ -46,16 +53,46 @@ class TransactionService {
   async list(
     userId: number,
     params: TransactionListParams = {},
-  ): Promise<TransactionDTO[]> {
+  ): Promise<Page<TransactionDTO>> {
+    const limit = params.limit ?? DEFAULT_PAGE_SIZE;
+
     const rows = await prisma.transaction.findMany({
       where: {
         userId,
-        ...buildPeriodFilter(params),
         ...(params.type ? { type: params.type } : {}),
+        AND: [
+          buildPeriodFilter(params),
+          buildSearchFilter(params.q),
+          buildCursorFilter(params.cursor),
+        ],
       },
+      // `id` hanya dipakai membentuk cursor, tidak ikut ke DTO.
+      select: { ...select, id: true },
+      orderBy: [{ occurredAt: "desc" }, { id: "desc" }],
+      take: limit + 1,
+    });
+
+    return buildPage(
+      rows,
+      limit,
+      toDTO,
+      (row) => encodeCursor([row.occurredAt.toISOString().slice(0, 10), row.id]),
+    );
+  }
+
+  /**
+   * Laporan PDF butuh seluruh transaksi periode, bukan satu halaman.
+   * Sengaja dipisah agar batas paginasi tidak diam-diam memotong laporan.
+   */
+  async listAllInPeriod(
+    userId: number,
+    year: number,
+    month?: number,
+  ): Promise<TransactionDTO[]> {
+    const rows = await prisma.transaction.findMany({
+      where: { userId, ...buildPeriodFilter({ year, month }) },
       select,
       orderBy: [{ occurredAt: "desc" }, { id: "desc" }],
-      take: params.limit ?? 100,
     });
 
     return rows.map(toDTO);
@@ -118,7 +155,9 @@ class TransactionService {
   }
 }
 
-function buildPeriodFilter(params: TransactionListParams) {
+function buildPeriodFilter(
+  params: TransactionListParams,
+): Prisma.TransactionWhereInput {
   if (!params.year) return {};
 
   const { start, end } = params.month
@@ -126,6 +165,36 @@ function buildPeriodFilter(params: TransactionListParams) {
     : yearRange(params.year);
 
   return { occurredAt: { gte: start, lt: end } };
+}
+
+/** Cocokkan pada catatan maupun nama kategori, tanpa peduli huruf besar/kecil. */
+function buildSearchFilter(q?: string): Prisma.TransactionWhereInput {
+  if (!q) return {};
+
+  return {
+    OR: [
+      { note: { contains: q, mode: "insensitive" } },
+      { category: { name: { contains: q, mode: "insensitive" } } },
+    ],
+  };
+}
+
+/**
+ * Urutannya (occurredAt desc, id desc), jadi cursor harus membandingkan
+ * keduanya — memakai tanggal saja akan melewatkan transaksi lain di hari yang sama.
+ */
+function buildCursorFilter(cursor?: string): Prisma.TransactionWhereInput {
+  const parts = decodeCursor(cursor);
+  if (!parts || parts.length !== 2) return {};
+
+  const [date, rawId] = parts;
+  const occurredAt = toDateOnly(date);
+  const id = Number(rawId);
+  if (Number.isNaN(id)) return {};
+
+  return {
+    OR: [{ occurredAt: { lt: occurredAt } }, { occurredAt, id: { lt: id } }],
+  };
 }
 
 async function resolveCategoryId(userId: number, categoryUuid?: string | null) {

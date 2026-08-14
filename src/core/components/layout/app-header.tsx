@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import DynamicIcon from "@/src/core/components/commons/dynamic-icon";
 import { authApi } from "@/src/core/auth/auth.api";
 import { useApiAction } from "@/src/core/hooks/use-api-action";
+import { markRouteTransitionStart } from "@/src/core/lib/route-transition";
 
 export default function AppHeader({ userName }: { userName: string }) {
   const router = useRouter();
@@ -13,6 +14,7 @@ export default function AppHeader({ userName }: { userName: string }) {
     const result = await run();
     if (!result) return;
 
+    markRouteTransitionStart();
     router.replace("/login");
     router.refresh();
   }

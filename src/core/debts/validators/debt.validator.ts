@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { cursorParamsSchema } from "@/src/core/lib/pagination";
 
 export const debtSchema = z.object({
   type: z.enum(["RECEIVABLE", "PAYABLE"], { error: "Tipe tidak valid." }),
@@ -24,7 +25,7 @@ export const debtPaymentSchema = z.object({
 
 export type DebtPaymentInput = z.infer<typeof debtPaymentSchema>;
 
-export const debtListSchema = z.object({
+export const debtListSchema = cursorParamsSchema.extend({
   type: z.enum(["RECEIVABLE", "PAYABLE"]).optional(),
   status: z.enum(["OPEN", "PAID"]).optional(),
 });

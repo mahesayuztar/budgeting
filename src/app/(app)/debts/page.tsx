@@ -4,9 +4,8 @@ import { debtService } from "@/src/core/debts/services/debt.service";
 import { reportService } from "@/src/core/reports/services/report.service";
 import { Card } from "@/src/core/components/ui/card";
 import { PageHeader } from "@/src/core/components/ui/page-header";
-import { EmptyState } from "@/src/core/components/ui/empty-state";
 import { Money } from "@/src/core/components/ui/money";
-import DebtCard from "./debt-card";
+import DebtsTable from "./debts-table";
 import DebtForm from "./debt-form";
 
 type SearchParams = Promise<{ type?: string }>;
@@ -26,7 +25,7 @@ export default async function DebtsPage({
 
   const active = rawType === "RECEIVABLE" ? "RECEIVABLE" : "PAYABLE";
 
-  const [debts, summary] = await Promise.all([
+  const [initialPage, summary] = await Promise.all([
     debtService.list(user.id, { type: active }),
     reportService.getDebtSummary(user.id),
   ]);
@@ -92,21 +91,9 @@ export default async function DebtsPage({
         </Card>
       </div>
 
-      {debts.length === 0 ? (
-        <Card>
-          <EmptyState
-            icon="ph:handshake"
-            title="Belum ada catatan"
-            description="Gunakan tombol Tambah Hutang / Piutang untuk mencatat yang baru."
-          />
-        </Card>
-      ) : (
-        <div className="grid items-start gap-3 lg:grid-cols-2 2xl:grid-cols-3">
-          {debts.map((debt) => (
-            <DebtCard key={debt.uuid} debt={debt} />
-          ))}
-        </div>
-      )}
+      <Card>
+        <DebtsTable type={active} initialPage={initialPage} />
+      </Card>
     </div>
   );
 }

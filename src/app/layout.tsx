@@ -1,6 +1,7 @@
 import { Plus_Jakarta_Sans } from "next/font/google";
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
+import RouteLoadingOverlay from "@/src/core/components/layout/route-loading-overlay";
 import "./globals.css";
 
 const jakarta = Plus_Jakarta_Sans({
@@ -32,7 +33,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="id" className={`${fontBrand.variable} ${jakarta.variable}`}>
-      <body className="font-sans antialiased">{children}</body>
+      <body className="font-sans antialiased">
+        <RouteLoadingOverlay />
+        {children}
+      </body>
     </html>
   );
 }

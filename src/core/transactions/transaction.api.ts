@@ -1,4 +1,5 @@
 import { api } from "@/src/core/lib/api-client";
+import type { Page } from "@/src/core/lib/pagination";
 import type { TransactionDTO } from "./services/transaction.service";
 import type {
   TransactionInput,
@@ -7,7 +8,7 @@ import type {
 
 export const transactionApi = {
   list: (params: TransactionListParams = {}) =>
-    api.get<TransactionDTO[]>("/api/transactions", { params }),
+    api.get<Page<TransactionDTO>>("/api/transactions", { params }),
 
   create: (input: TransactionInput) =>
     api.post<TransactionDTO>("/api/transactions", input),

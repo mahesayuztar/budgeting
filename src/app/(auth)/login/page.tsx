@@ -7,6 +7,7 @@ import { useState } from "react";
 import { ErrorAlert } from "@/src/core/components/ui/alert";
 import { useApiAction } from "@/src/core/hooks/use-api-action";
 import { authApi } from "@/src/core/auth/auth.api";
+import { markRouteTransitionStart } from "@/src/core/lib/route-transition";
 
 const CONTROL =
   "w-full px-4 py-3 rounded-xl border bg-white text-gray-800 outline-none transition-all duration-200 placeholder:text-gray-400";
@@ -45,6 +46,7 @@ export default function LoginPage() {
     const user = await run({ email, password });
     if (!user) return;
 
+    markRouteTransitionStart();
     router.replace("/dashboard");
     router.refresh();
   }

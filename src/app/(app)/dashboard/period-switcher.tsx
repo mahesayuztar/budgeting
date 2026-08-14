@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { MONTH_NAMES_ID } from "@/src/core/lib/date";
+import { markRouteTransitionStart } from "@/src/core/lib/route-transition";
 
 export default function PeriodSwitcher({
   year,
@@ -19,6 +20,7 @@ export default function PeriodSwitcher({
     const params = new URLSearchParams(searchParams);
     params.set("year", String(next.year ?? year));
     params.set("month", String(next.month ?? month));
+    markRouteTransitionStart();
     router.push(`${basePath}?${params.toString()}`);
   }
 

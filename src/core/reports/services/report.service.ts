@@ -199,8 +199,9 @@ class ReportService {
     return summary;
   }
 
-  getRecentTransactions(userId: number, limit = 5): Promise<TransactionDTO[]> {
-    return transactionService.list(userId, { limit });
+  async getRecentTransactions(userId: number, limit = 5): Promise<TransactionDTO[]> {
+    const page = await transactionService.list(userId, { limit });
+    return page.items;
   }
 }
 

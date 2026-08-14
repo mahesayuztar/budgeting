@@ -1,4 +1,5 @@
 import { api } from "@/src/core/lib/api-client";
+import type { Page } from "@/src/core/lib/pagination";
 import type { DebtDTO } from "./services/debt.service";
 import type {
   DebtInput,
@@ -8,7 +9,7 @@ import type {
 
 export const debtApi = {
   list: (params: DebtListParams = {}) =>
-    api.get<DebtDTO[]>("/api/debts", { params }),
+    api.get<Page<DebtDTO>>("/api/debts", { params }),
 
   create: (input: DebtInput) => api.post<DebtDTO>("/api/debts", input),
 
