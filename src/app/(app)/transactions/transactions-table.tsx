@@ -56,7 +56,7 @@ export default function TransactionsTable({
       {
         id: "category",
         header: "Kategori",
-        meta: { className: "w-[30vw] max-w-0" },
+        meta: { className: "w-[30vw]" },
         cell: ({ row }) => {
           const item = row.original;
 
@@ -108,8 +108,8 @@ export default function TransactionsTable({
           </span>
         ),
         meta: {
-          className: "hidden lg:table-cell",
-          headerClassName: "hidden lg:table-cell",
+          className: "hidden lg:table-cell lg:w-[20vw]",
+          headerClassName: "hidden lg:table-cell lg:w-[20vw]",
         },
       },
       {

@@ -11,7 +11,8 @@ const HIDE_DELAY_MS = 250;
 
 function isInternalNavigationClick(event: MouseEvent) {
   if (event.defaultPrevented || event.button !== 0) return false;
-  if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return false;
+  if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
+    return false;
 
   const target = event.target as HTMLElement | null;
   const anchor = target?.closest("a");
@@ -21,7 +22,10 @@ function isInternalNavigationClick(event: MouseEvent) {
 
   const url = new URL(anchor.href, window.location.href);
   if (url.origin !== window.location.origin) return false;
-  if (url.pathname === window.location.pathname && url.search === window.location.search) {
+  if (
+    url.pathname === window.location.pathname &&
+    url.search === window.location.search
+  ) {
     return false;
   }
 
@@ -121,14 +125,17 @@ function RouteLoadingOverlayContent() {
       className="fixed inset-0 z-[100] flex flex-col items-center justify-center gap-5 bg-white/85 backdrop-blur-sm"
     >
       <div className="relative flex h-16 w-16 items-center justify-center">
-        <span className="absolute inset-0 animate-spin rounded-full border-4 border-gray-200 border-t-gray-800" />
+        {/* Cincin peach lembut sebagai jalur, lengan peach pekat yang berputar
+            di atasnya — dua tingkat kecerahan dari warna primary yang sama. */}
+        <span className="absolute inset-0 animate-spin rounded-full border-4 border-theme-secondary border-t-theme-primary" />
         {/* eslint-disable-next-line @next/next/no-img-element -- favicon.ico ikut berubah otomatis saat filenya diganti */}
         <img src="/favicon.ico" alt="" className="h-8 w-8 rounded-md" />
       </div>
 
-      <div className="h-1.5 w-40 overflow-hidden rounded-full bg-gray-200">
+      <div className="h-1.5 w-40 overflow-hidden rounded-full bg-theme-light">
+        {/* Gradasi primary -> accent: dua ujung palet bertemu di satu elemen. */}
         <div
-          className="h-full rounded-full bg-gray-800 transition-[width] duration-200 ease-out"
+          className="h-full rounded-full bg-gradient-to-r from-theme-primary to-theme-accent transition-[width] duration-200 ease-out"
           style={{ width: `${progress}%` }}
         />
       </div>

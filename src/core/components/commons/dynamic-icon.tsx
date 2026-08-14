@@ -42,13 +42,19 @@ const DynamicIcon = ({ icon, ...rest }: IconProps) => {
 
     let cancelled = false;
 
-    loadIcon(icon as string).then((data) => {
-      if (!cancelled && data) {
-        iconCache[icon as string] = data;
-        saveCache();
-        setLoadedIcon(data);
-      }
-    });
+    // Tanpa .catch(), setiap ikon yang gagal dimuat jadi unhandled rejection
+    // dan ikonnya diam-diam kosong. <Icon> sudah bisa fallback ke nama ikon.
+    loadIcon(icon as string)
+      .then((data) => {
+        if (!cancelled && data) {
+          iconCache[icon as string] = data;
+          saveCache();
+          setLoadedIcon(data);
+        }
+      })
+      .catch(() => {
+        /* biarkan <Icon> memuat sendiri lewat nama ikonnya */
+      });
 
     return () => {
       cancelled = true;

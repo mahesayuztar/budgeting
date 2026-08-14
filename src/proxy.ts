@@ -1,7 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE } from "@/src/core/auth/session";
 
-const PROTECTED_PREFIXES = ["/dashboard", "/transactions", "/debts", "/reports"];
+const PROTECTED_PREFIXES = [
+  "/dashboard",
+  "/transactions",
+  "/debts",
+  "/reports",
+  "/profile",
+];
 const GUEST_ONLY_PATHS = ["/login", "/register"];
 
 /**

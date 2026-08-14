@@ -3,8 +3,10 @@ import type { ButtonHTMLAttributes } from "react";
 type Variant = "primary" | "secondary" | "ghost" | "danger";
 
 const VARIANTS: Record<Variant, string> = {
+  // theme-primary adalah warna aksi utama; secondary jadi hover-nya yang
+  // lebih terang, bukan sekadar accent biru yang dulu dipakai di sini.
   primary:
-    "bg-theme-accent hover:bg-theme-accent-light text-gray-800 shadow-md shadow-theme-accent/30",
+    "bg-theme-primary hover:bg-theme-secondary text-gray-800 shadow-md shadow-theme-primary/30",
   secondary: "bg-white hover:bg-gray-50 text-gray-800 border border-gray-200",
   ghost: "bg-transparent hover:bg-black/5 text-gray-600",
   danger: "bg-red-50 hover:bg-red-100 text-red-700 border border-red-200",

@@ -1,3 +1,5 @@
+import type { FieldErrors } from "./api-response";
+
 export class AppError extends Error {
   readonly status: number;
 
@@ -26,5 +28,20 @@ export class ConflictError extends AppError {
   constructor(message = "Data sudah digunakan.") {
     super(message, 409);
     this.name = "ConflictError";
+  }
+}
+
+/**
+ * Untuk kesalahan isian yang baru ketahuan di service (mis. password lama
+ * salah). 401 tidak dipakai di sini: klien memantulkan 401 ke /login, padahal
+ * sesi pengguna masih sah.
+ */
+export class ValidationError extends AppError {
+  readonly fieldErrors: FieldErrors;
+
+  constructor(fieldErrors: FieldErrors, message = "Periksa kembali isian Anda.") {
+    super(message, 422);
+    this.name = "ValidationError";
+    this.fieldErrors = fieldErrors;
   }
 }

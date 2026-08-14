@@ -1,5 +1,5 @@
 import { ZodError } from "zod";
-import { AppError } from "./errors";
+import { AppError, ValidationError } from "./errors";
 
 export type FieldErrors = Record<string, string[]>;
 
@@ -30,6 +30,10 @@ export function handleApiError(error: unknown) {
   if (error instanceof ZodError) {
     const flattened = z4FieldErrors(error);
     return fail("Periksa kembali isian Anda.", 422, flattened);
+  }
+
+  if (error instanceof ValidationError) {
+    return fail(error.message, error.status, error.fieldErrors);
   }
 
   if (error instanceof AppError) {

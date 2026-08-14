@@ -151,7 +151,7 @@ export default async function DashboardPage({
                       className="h-full rounded-full"
                       style={{
                         width: `${Math.max(item.share * 100, 2)}%`,
-                        backgroundColor: item.color ?? "#FFBE91",
+                        backgroundColor: item.color ?? "var(--color-theme-primary)",
                       }}
                     />
                   </div>

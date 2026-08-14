@@ -122,7 +122,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={pending}
-              className="w-full py-3.5 px-4 bg-theme-accent hover:bg-theme-accent-light text-gray-800 font-bold rounded-xl transition-all duration-200 active:scale-[0.98] shadow-md shadow-theme-accent/30 mt-2 cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 disabled:active:scale-100"
+              className="w-full py-3.5 px-4 bg-theme-primary hover:bg-theme-secondary text-gray-800 font-bold rounded-xl transition-all duration-200 active:scale-[0.98] shadow-md shadow-theme-primary/30 mt-2 cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 disabled:active:scale-100"
             >
               {pending ? "Memproses..." : "Masuk"}
             </button>

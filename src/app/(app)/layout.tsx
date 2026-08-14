@@ -10,7 +10,10 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 
   return (
     <QueryProvider>
-      <div className="min-h-screen bg-theme-background">
+      {/* Layout kartu-berat butuh kanvas bertint supaya kartu putih terbaca
+          "mengambang" (pola Stripe/Mercury). Tint-nya surface yang hampir
+          netral — krem penuh terlalu pekat untuk area seluas ini. */}
+      <div className="min-h-screen bg-theme-surface">
         <BottomNav />
         <AppHeader userName={user.name} />
 

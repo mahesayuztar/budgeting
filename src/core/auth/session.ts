@@ -108,3 +108,18 @@ export async function destroySession() {
 
   cookieStore.delete(SESSION_COOKIE);
 }
+
+/**
+ * Dipakai setelah ganti password: sesi di perangkat lain dicabut, sesi yang
+ * sedang dipakai tetap hidup supaya pengguna tidak terlempar ke login.
+ */
+export async function destroyOtherSessions(userId: number) {
+  const token = (await cookies()).get(SESSION_COOKIE)?.value;
+
+  await prisma.session.deleteMany({
+    where: {
+      userId,
+      ...(token ? { tokenHash: { not: hashToken(token) } } : {}),
+    },
+  });
+}

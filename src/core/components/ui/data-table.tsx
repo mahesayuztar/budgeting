@@ -183,14 +183,16 @@ export function DataTable<TData extends RowData>({
               {table.getHeaderGroups().map((headerGroup) => (
                 <tr
                   key={headerGroup.id}
-                  className="border-b border-gray-100 text-left text-[11px] uppercase tracking-wide text-gray-400"
+                  // Krem pekat pas di sini: area tipis, dan justru menandai
+                  // baris header sebagai "chrome" tabel, bukan data.
+                  className="border-b border-theme-light-border/40 bg-theme-light text-left text-[11px] uppercase tracking-wide text-gray-500"
                 >
                   {headerGroup.headers.map((header) => (
                     <th
                       key={header.id}
                       // px-3 memberi jarak antar kolom; kolom utama memakai
                       // `w-full max-w-0` sehingga sisanya mudah terhimpit.
-                      className={`whitespace-nowrap px-3 py-2 font-semibold first:pl-0 last:pr-0 ${
+                      className={`whitespace-nowrap px-3 py-2.5 font-semibold first:rounded-l-lg last:rounded-r-lg ${
                         header.column.columnDef.meta?.headerClassName ?? ""
                       }`}
                     >
@@ -206,13 +208,18 @@ export function DataTable<TData extends RowData>({
               ))}
             </thead>
 
-            <tbody className="divide-y divide-gray-50">
+            <tbody>
               {table.getRowModel().rows.map((row) => (
-                <tr key={row.id} className="align-middle">
+                <tr
+                  key={row.id}
+                  className="group align-middle transition-colors hover:bg-theme-light/70"
+                >
                   {row.getAllCells().map((cell) => (
                     <td
                       key={cell.id}
-                      className={`px-3 py-2.5 first:pl-0 last:pr-0 ${
+                      // Pemisah baris di td (bukan divide-y di tbody) supaya
+                      // tidak bentrok dengan sudut membulat saat hover.
+                      className={`border-b border-gray-50 px-3 py-2.5 first:rounded-l-lg last:rounded-r-lg ${
                         cell.column.columnDef.meta?.className ?? ""
                       }`}
                     >

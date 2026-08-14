@@ -2,7 +2,7 @@ import "server-only";
 
 import { Prisma, TransactionType } from "@prisma/client";
 import { prisma } from "@/src/core/lib/prisma";
-import { ConflictError } from "@/src/core/lib/errors";
+import { ConflictError, NotFoundError } from "@/src/core/lib/errors";
 import type { CategoryInput } from "../validators/category.validator";
 
 export type CategoryDTO = {
@@ -12,6 +12,10 @@ export type CategoryDTO = {
   icon: string | null;
   color: string | null;
 };
+
+/** Dipakai halaman pengaturan: jumlah transaksi menentukan seberapa berat
+    dampak menghapus kategori, jadi ikut ditampilkan sebelum dihapus. */
+export type CategoryUsageDTO = CategoryDTO & { transactionCount: number };
 
 /** Diseed saat register supaya aplikasi langsung bisa dipakai. */
 export const DEFAULT_CATEGORIES: ReadonlyArray<
@@ -45,6 +49,19 @@ class CategoryService {
     });
   }
 
+  async listWithUsage(userId: number): Promise<CategoryUsageDTO[]> {
+    const rows = await prisma.category.findMany({
+      where: { userId },
+      select: { ...select, _count: { select: { transactions: true } } },
+      orderBy: [{ type: "asc" }, { name: "asc" }],
+    });
+
+    return rows.map(({ _count, ...category }) => ({
+      ...category,
+      transactionCount: _count.transactions,
+    }));
+  }
+
   async create(userId: number, input: CategoryInput): Promise<CategoryDTO> {
     try {
       return await prisma.category.create({
@@ -52,14 +69,44 @@ class CategoryService {
         select,
       });
     } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === "P2002"
-      ) {
-        throw new ConflictError("Kategori dengan nama dan tipe ini sudah ada.");
-      }
-      throw error;
+      throw toCategoryError(error);
     }
+  }
+
+  async update(
+    userId: number,
+    uuid: string,
+    input: CategoryInput,
+  ): Promise<CategoryDTO> {
+    const category = await this.mustOwn(userId, uuid);
+
+    try {
+      return await prisma.category.update({
+        where: { id: category.id },
+        data: input,
+        select,
+      });
+    } catch (error) {
+      throw toCategoryError(error);
+    }
+  }
+
+  /**
+   * Transaksi lama tidak ikut terhapus: relasinya `SetNull`, jadi riwayat tetap
+   * utuh dan hanya kehilangan label kategorinya.
+   */
+  async remove(userId: number, uuid: string): Promise<void> {
+    const category = await this.mustOwn(userId, uuid);
+    await prisma.category.delete({ where: { id: category.id } });
+  }
+
+  private async mustOwn(userId: number, uuid: string) {
+    const category = await prisma.category.findFirst({
+      where: { uuid, userId },
+      select: { id: true },
+    });
+    if (!category) throw new NotFoundError("Kategori tidak ditemukan.");
+    return category;
   }
 
   /** Dipanggil di dalam transaksi register. */
@@ -68,6 +115,16 @@ class CategoryService {
       data: DEFAULT_CATEGORIES.map((category) => ({ ...category, userId })),
     });
   }
+}
+
+function toCategoryError(error: unknown) {
+  if (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === "P2002"
+  ) {
+    return new ConflictError("Kategori dengan nama dan tipe ini sudah ada.");
+  }
+  return error;
 }
 
 export const categoryService = new CategoryService();

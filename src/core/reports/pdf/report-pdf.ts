@@ -1,8 +1,18 @@
 import "server-only";
 
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
+import {
+  PDFDocument,
+  StandardFonts,
+  rgb,
+  type PDFFont,
+  type PDFPage,
+} from "pdf-lib";
 import { formatAmountPlain } from "@/src/core/lib/money";
-import { formatDateShort, MONTH_NAMES_ID, monthLabel } from "@/src/core/lib/date";
+import {
+  formatDateShort,
+  MONTH_NAMES_ID,
+  monthLabel,
+} from "@/src/core/lib/date";
 import type { TransactionDTO } from "@/src/core/transactions/services/transaction.service";
 import type {
   MonthlySummary,
@@ -73,10 +83,18 @@ class Cursor {
     const safe = sanitize(value);
     const x =
       options.align === "right" && options.width !== undefined
-        ? (options.x ?? MARGIN) + options.width - font.widthOfTextAtSize(safe, size)
+        ? (options.x ?? MARGIN) +
+          options.width -
+          font.widthOfTextAtSize(safe, size)
         : (options.x ?? MARGIN);
 
-    this.page.drawText(safe, { x, y: this.y, size, font, color: options.color ?? INK });
+    this.page.drawText(safe, {
+      x,
+      y: this.y,
+      size,
+      font,
+      color: options.color ?? INK,
+    });
   }
 
   down(amount = LINE) {
@@ -97,7 +115,10 @@ class Cursor {
     const stamp = `Dibuat ${formatDateShort(generatedAt)} ${generatedAt
       .getHours()
       .toString()
-      .padStart(2, "0")}:${generatedAt.getMinutes().toString().padStart(2, "0")}`;
+      .padStart(
+        2,
+        "0",
+      )}:${generatedAt.getMinutes().toString().padStart(2, "0")}`;
 
     this.pages.forEach((page, index) => {
       page.drawText(sanitize(stamp), {
@@ -137,13 +158,21 @@ function truncate(value: string, font: PDFFont, size: number, max: number) {
   if (font.widthOfTextAtSize(safe, size) <= max) return safe;
 
   let result = safe;
-  while (result.length > 1 && font.widthOfTextAtSize(`${result}...`, size) > max) {
+  while (
+    result.length > 1 &&
+    font.widthOfTextAtSize(`${result}...`, size) > max
+  ) {
     result = result.slice(0, -1);
   }
   return `${result}...`;
 }
 
-function drawHeader(cursor: Cursor, title: string, period: string, userName: string) {
+function drawHeader(
+  cursor: Cursor,
+  title: string,
+  period: string,
+  userName: string,
+) {
   cursor.text("Laporan Keuangan", { size: 18, bold: true });
   cursor.down(20);
   cursor.text(title, { size: 12, bold: true });
@@ -160,7 +189,7 @@ function drawSummaryPanel(
   cursor: Cursor,
   rows: { label: string; value: number; tone?: "auto" }[],
 ) {
-  const height = 24 + rows.length * LINE;
+  const height = 12 + rows.length * LINE;
   cursor.page.drawRectangle({
     x: MARGIN,
     y: cursor.y - height + LINE,
@@ -182,7 +211,7 @@ function drawSummaryPanel(
     });
     cursor.down();
   }
-  cursor.down(16);
+  cursor.down(30);
 }
 
 function drawTableHead(cursor: Cursor, columns: Columns) {
@@ -260,7 +289,12 @@ export async function buildMonthlyReportPdf(data: MonthlyReportData) {
     { label: "Kategori", x: MARGIN + 70, width: 105 },
     { label: "Catatan", x: MARGIN + 180, width: 145 },
     { label: "Tipe", x: MARGIN + 335, width: 45 },
-    { label: "Jumlah", x: MARGIN + 385, width: A4.width - MARGIN * 2 - 385, align: "right" },
+    {
+      label: "Jumlah",
+      x: MARGIN + 385,
+      width: A4.width - MARGIN * 2 - 385,
+      align: "right",
+    },
   ];
 
   cursor.ensure(60);
@@ -269,22 +303,36 @@ export async function buildMonthlyReportPdf(data: MonthlyReportData) {
   drawTableHead(cursor, columns);
 
   if (transactions.length === 0) {
-    cursor.text("Belum ada transaksi pada periode ini.", { size: 10, color: MUTED });
+    cursor.text("Belum ada transaksi pada periode ini.", {
+      size: 10,
+      color: MUTED,
+    });
     cursor.down();
   }
 
   for (const transaction of transactions) {
     cursor.ensure(LINE, () => drawTableHead(cursor, columns));
 
-    cursor.text(formatDateShort(transaction.occurredAt), { x: columns[0].x, size: 9 });
-    cursor.text(
-      truncate(transaction.category?.name ?? "Tanpa Kategori", fonts.regular, 9, columns[1].width),
-      { x: columns[1].x, size: 9 },
-    );
-    cursor.text(truncate(transaction.note ?? "-", fonts.regular, 9, columns[2].width), {
-      x: columns[2].x,
+    cursor.text(formatDateShort(transaction.occurredAt), {
+      x: columns[0].x,
       size: 9,
     });
+    cursor.text(
+      truncate(
+        transaction.category?.name ?? "Tanpa Kategori",
+        fonts.regular,
+        9,
+        columns[1].width,
+      ),
+      { x: columns[1].x, size: 9 },
+    );
+    cursor.text(
+      truncate(transaction.note ?? "-", fonts.regular, 9, columns[2].width),
+      {
+        x: columns[2].x,
+        size: 9,
+      },
+    );
     cursor.text(transaction.type === "INCOME" ? "Masuk" : "Keluar", {
       x: columns[3].x,
       size: 9,
@@ -330,7 +378,12 @@ export async function buildYearlyReportPdf(data: YearlyReportData) {
     { label: "Bulan", x: MARGIN, width: 120 },
     { label: "Pemasukan", x: MARGIN + 130, width: 120, align: "right" },
     { label: "Pengeluaran", x: MARGIN + 260, width: 120, align: "right" },
-    { label: "Selisih", x: MARGIN + 390, width: A4.width - MARGIN * 2 - 390, align: "right" },
+    {
+      label: "Selisih",
+      x: MARGIN + 390,
+      width: A4.width - MARGIN * 2 - 390,
+      align: "right",
+    },
   ];
 
   cursor.text("Rekap per Bulan", { size: 11, bold: true });

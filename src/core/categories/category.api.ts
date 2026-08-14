@@ -8,4 +8,10 @@ export const categoryApi = {
 
   create: (input: CategoryInput) =>
     api.post<CategoryDTO>("/api/categories", input),
+
+  update: (uuid: string, input: CategoryInput) =>
+    api.patch<CategoryDTO>(`/api/categories/${uuid}`, input),
+
+  remove: (uuid: string) =>
+    api.delete<{ deleted: boolean }>(`/api/categories/${uuid}`),
 };

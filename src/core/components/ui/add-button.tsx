@@ -19,7 +19,7 @@ export function AddButton({
       <button
         type="button"
         onClick={onClick}
-        className="hidden items-center gap-2 rounded-xl bg-theme-accent px-4 py-2.5 text-sm font-bold text-gray-800 shadow-md shadow-theme-accent/30 transition-all duration-200 hover:bg-theme-accent-light active:scale-[0.98] md:inline-flex"
+        className="hidden items-center gap-2 rounded-xl bg-theme-primary px-4 py-2.5 text-sm font-bold text-gray-800 shadow-md shadow-theme-primary/30 transition-all duration-200 hover:bg-theme-secondary active:scale-[0.98] md:inline-flex"
       >
         <DynamicIcon icon="ph:plus" fontSize="18px" />
         {label}
@@ -29,7 +29,7 @@ export function AddButton({
         type="button"
         onClick={onClick}
         aria-label={label}
-        className="fixed bottom-20 right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-theme-accent text-gray-800 shadow-lg shadow-theme-accent/40 transition-transform active:scale-95 md:hidden"
+        className="fixed bottom-20 right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-theme-primary text-gray-800 shadow-lg shadow-theme-primary/40 transition-transform active:scale-95 md:hidden"
       >
         <DynamicIcon icon="ph:plus" fontSize="24px" />
       </button>
