@@ -127,6 +127,7 @@ export default function CategorySettings({
   }
 
   function openEdit(category: CategoryUsageDTO) {
+    if (category.type === "TRANSFER") return;
     setEditingUuid(category.uuid);
     setForm({
       name: category.name,
