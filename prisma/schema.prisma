@@ -23,6 +23,11 @@ enum DebtStatus {
   PAID
 }
 
+enum AccountType {
+  CASH
+  BANK
+}
+
 model User {
   id              Int       @id @default(autoincrement())
   uuid            String    @unique @default(uuid())
@@ -41,6 +46,7 @@ model User {
   categories   Category[]
   transactions Transaction[]
   debts        Debt[]
+  accounts     Account[]
 }
 
 model Session {
@@ -81,10 +87,10 @@ model Transaction {
   user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   categoryId Int?
   category   Category?       @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  // Terisi hanya untuk transaksi yang dibuat otomatis dari hutang/piutang,
-  // supaya ikut terhapus saat catatan hutangnya dihapus.
   debtId     Int?
   debt       Debt?           @relation(fields: [debtId], references: [id], onDelete: Cascade)
+  accountId  Int?
+  account    Account?        @relation(fields: [accountId], references: [id], onDelete: Restrict)
   type       TransactionType
   amount     Decimal         @db.Decimal(14, 2)
   note       String?
@@ -96,6 +102,7 @@ model Transaction {
   @@index([userId, type])
   @@index([categoryId])
   @@index([debtId])
+  @@index([accountId])
 }
 
 model Debt {
@@ -132,4 +139,27 @@ model DebtPayment {
   createdAt DateTime @default(now())
 
   @@index([debtId])
+}
+
+model Account {
+  id             Int         @id @default(autoincrement())
+  uuid           String      @unique @default(uuid())
+  userId         Int
+  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name           String
+  type           AccountType
+  color          String?
+  bankName       String?
+  accountNumber  String?
+  description    String?
+  balance        Decimal     @default(0) @db.Decimal(18, 2)
+  openingBalance Decimal     @default(0) @db.Decimal(18, 2)
+  isActive       Boolean     @default(true)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  transactions Transaction[]
+
+  @@index([userId])
+  @@index([userId, type])
 }

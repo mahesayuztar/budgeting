@@ -7,6 +7,7 @@ import { categoryService } from "@/src/core/categories/services/category.service
 import { createSession, destroySession, type SessionUser } from "../session";
 import type { RegisterInput } from "../validators/register.validator";
 import type { LoginInput } from "../validators/login.validator";
+import { accountService } from "../../accounts/services/account.service";
 
 const INVALID_CREDENTIALS = "Email atau password salah.";
 
@@ -45,6 +46,7 @@ class AuthService {
       });
 
       await categoryService.seedDefaults(tx, created.id);
+      await accountService.seedDefaults(tx, created.id);
       return created;
     });
 
