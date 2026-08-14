@@ -18,8 +18,14 @@ function resolvePeriod(raw: { year?: string; month?: string }) {
   const month = Number(raw.month);
 
   return {
-    year: Number.isInteger(year) && year >= 2000 && year <= 2100 ? year : fallback.year,
-    month: Number.isInteger(month) && month >= 1 && month <= 12 ? month : fallback.month,
+    year:
+      Number.isInteger(year) && year >= 2000 && year <= 2100
+        ? year
+        : fallback.year,
+    month:
+      Number.isInteger(month) && month >= 1 && month <= 12
+        ? month
+        : fallback.month,
   };
 }
 
@@ -46,7 +52,9 @@ export default async function DashboardPage({
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <Card className="col-span-2 border-theme-light-border bg-theme-light sm:col-span-1">
-          <p className="text-xs font-semibold text-gray-500">Selisih bulan ini</p>
+          <p className="text-xs font-semibold text-gray-500">
+            Selisih bulan ini
+          </p>
           <p className="mt-1 text-2xl font-bold lg:text-3xl">
             <Money value={summary.net} tone="auto" />
           </p>
@@ -83,7 +91,8 @@ export default async function DashboardPage({
             action={
               <div className="flex items-center gap-3 text-[10px] font-semibold text-gray-400">
                 <span className="flex items-center gap-1">
-                  <span className="h-2 w-2 rounded-sm bg-emerald-400/80" /> Masuk
+                  <span className="h-2 w-2 rounded-sm bg-emerald-400/80" />{" "}
+                  Masuk
                 </span>
                 <span className="flex items-center gap-1">
                   <span className="h-2 w-2 rounded-sm bg-red-300" /> Keluar
@@ -127,7 +136,7 @@ export default async function DashboardPage({
         </Card>
       </div>
 
-      <div className="grid items-start gap-4 lg:grid-cols-2">
+      <div className="grid items-start gap-4 sm:grid-cols-2">
         <Card>
           <SectionTitle title="Pengeluaran per Kategori" />
           {summary.expenseByCategory.length === 0 ? (
@@ -140,9 +149,11 @@ export default async function DashboardPage({
             <ul className="flex flex-col gap-3">
               {summary.expenseByCategory.slice(0, 6).map((item) => (
                 <li key={item.name} className="flex flex-col gap-1">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-semibold text-gray-700">{item.name}</span>
-                    <span className="text-gray-500">
+                  <div className="flex items-center justify-between gap-2 text-xs">
+                    <span className="min-w-0 truncate font-semibold text-gray-700">
+                      {item.name}
+                    </span>
+                    <span className="shrink-0 text-gray-500">
                       <Money value={item.total} />
                     </span>
                   </div>
@@ -151,7 +162,8 @@ export default async function DashboardPage({
                       className="h-full rounded-full"
                       style={{
                         width: `${Math.max(item.share * 100, 2)}%`,
-                        backgroundColor: item.color ?? "var(--color-theme-primary)",
+                        backgroundColor:
+                          item.color ?? "var(--color-theme-primary)",
                       }}
                     />
                   </div>
@@ -183,10 +195,15 @@ export default async function DashboardPage({
           ) : (
             <ul className="flex flex-col divide-y divide-gray-50">
               {recent.map((transaction) => (
-                <li key={transaction.uuid} className="flex items-center gap-3 py-2.5">
+                <li
+                  key={transaction.uuid}
+                  className="flex items-center gap-3 py-2.5"
+                >
                   <span
                     className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-gray-700"
-                    style={{ backgroundColor: transaction.category?.color ?? "#F1F1F1" }}
+                    style={{
+                      backgroundColor: transaction.category?.color ?? "#F1F1F1",
+                    }}
                   >
                     <DynamicIcon
                       icon={transaction.category?.icon ?? "ph:circle-dashed"}
@@ -205,7 +222,9 @@ export default async function DashboardPage({
                   <p className="shrink-0 text-sm font-bold">
                     <Money
                       value={transaction.amount}
-                      tone={transaction.type === "INCOME" ? "income" : "expense"}
+                      tone={
+                        transaction.type === "INCOME" ? "income" : "expense"
+                      }
                     />
                   </p>
                 </li>

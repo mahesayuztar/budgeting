@@ -27,8 +27,6 @@ class AuthService {
 
     const password = await argon2.hash(input.password);
 
-    // User dan kategori default harus lahir bersama: user tanpa kategori
-    // membuat form transaksi tidak bisa dipakai.
     const user = await prisma.$transaction(async (tx) => {
       const created = await tx.user.create({
         data: {
@@ -37,7 +35,13 @@ class AuthService {
           email: input.email,
           password,
         },
-        select: { id: true, uuid: true, name: true, username: true, email: true },
+        select: {
+          id: true,
+          uuid: true,
+          name: true,
+          username: true,
+          email: true,
+        },
       });
 
       await categoryService.seedDefaults(tx, created.id);
@@ -67,7 +71,9 @@ class AuthService {
       throw new AppError(INVALID_CREDENTIALS, 401);
     }
 
-    const valid = await argon2.verify(user.password, input.password).catch(() => false);
+    const valid = await argon2
+      .verify(user.password, input.password)
+      .catch(() => false);
     if (!valid) {
       throw new AppError(INVALID_CREDENTIALS, 401);
     }
