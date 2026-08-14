@@ -2,6 +2,7 @@ import { requireAuthUser } from "@/src/core/auth/dal";
 import { reportService } from "@/src/core/reports/services/report.service";
 import { currentPeriod, monthLabel, MONTH_NAMES_ID } from "@/src/core/lib/date";
 import { Card, SectionTitle } from "@/src/core/components/ui/card";
+import { PageHeader } from "@/src/core/components/ui/page-header";
 import { Money } from "@/src/core/components/ui/money";
 import PeriodSwitcher from "../dashboard/period-switcher";
 import ReportPanel from "./report-panel";
@@ -36,48 +37,48 @@ export default async function ReportsPage({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-gray-800">Laporan</h1>
-          <p className="text-xs text-gray-400">Pratinjau dan unduh rekap PDF</p>
-        </div>
+      <PageHeader title="Laporan" subtitle="Pratinjau dan unduh rekap PDF">
         <PeriodSwitcher year={year} month={month} basePath="/reports" />
+      </PageHeader>
+
+      <div className="grid items-start gap-4 xl:grid-cols-3">
+        {/* Pratinjau butuh ruang terlebar; angka-angka menemani di sampingnya. */}
+        <Card className="min-w-0 xl:col-span-2">
+          <SectionTitle title="Pratinjau & Unduh Laporan" />
+          <ReportPanel year={year} month={month} />
+        </Card>
+
+        {/* min-w-0 supaya kolom grid boleh menyusut di layar sempit. */}
+        <Card className="min-w-0">
+          <SectionTitle title={`Ringkasan ${monthLabel(year, month)}`} />
+          <dl className="flex flex-col gap-2 text-sm">
+            <div className="flex items-center justify-between">
+              <dt className="text-gray-500">Pemasukan</dt>
+              <dd className="font-bold">
+                <Money value={monthly.income} tone="income" />
+              </dd>
+            </div>
+            <div className="flex items-center justify-between">
+              <dt className="text-gray-500">Pengeluaran</dt>
+              <dd className="font-bold">
+                <Money value={monthly.expense} tone="expense" />
+              </dd>
+            </div>
+            <div className="flex items-center justify-between border-t border-gray-100 pt-2">
+              <dt className="font-semibold text-gray-700">Selisih</dt>
+              <dd className="font-bold">
+                <Money value={monthly.net} tone="auto" />
+              </dd>
+            </div>
+            <div className="flex items-center justify-between">
+              <dt className="text-gray-500">Jumlah transaksi</dt>
+              <dd className="font-semibold text-gray-700">
+                {monthly.transactionCount}
+              </dd>
+            </div>
+          </dl>
+        </Card>
       </div>
-
-      <Card>
-        <SectionTitle title="Pratinjau & Unduh Laporan" />
-        <ReportPanel year={year} month={month} />
-      </Card>
-
-      <Card>
-        <SectionTitle title={`Ringkasan ${monthLabel(year, month)}`} />
-        <dl className="flex flex-col gap-2 text-sm">
-          <div className="flex items-center justify-between">
-            <dt className="text-gray-500">Pemasukan</dt>
-            <dd className="font-bold">
-              <Money value={monthly.income} tone="income" />
-            </dd>
-          </div>
-          <div className="flex items-center justify-between">
-            <dt className="text-gray-500">Pengeluaran</dt>
-            <dd className="font-bold">
-              <Money value={monthly.expense} tone="expense" />
-            </dd>
-          </div>
-          <div className="flex items-center justify-between border-t border-gray-100 pt-2">
-            <dt className="font-semibold text-gray-700">Selisih</dt>
-            <dd className="font-bold">
-              <Money value={monthly.net} tone="auto" />
-            </dd>
-          </div>
-          <div className="flex items-center justify-between">
-            <dt className="text-gray-500">Jumlah transaksi</dt>
-            <dd className="font-semibold text-gray-700">
-              {monthly.transactionCount}
-            </dd>
-          </div>
-        </dl>
-      </Card>
 
       <Card>
         <SectionTitle title={`Rekap ${year}`} />
@@ -95,7 +96,12 @@ export default async function ReportsPage({
               {yearly.months.map((point) => (
                 <tr key={point.month}>
                   <td className="py-2 text-xs font-semibold text-gray-600">
-                    {MONTH_NAMES_ID[point.month - 1]}
+                    <span className="sm:hidden">
+                      {MONTH_NAMES_ID[point.month - 1].slice(0, 3)}
+                    </span>
+                    <span className="hidden sm:inline">
+                      {MONTH_NAMES_ID[point.month - 1]}
+                    </span>
                   </td>
                   <td className="py-2 text-right text-xs">
                     <Money value={point.income} tone="income" />

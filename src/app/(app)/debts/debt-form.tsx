@@ -6,7 +6,7 @@ import { Button } from "@/src/core/components/ui/button";
 import { Input } from "@/src/core/components/ui/field";
 import { ErrorAlert } from "@/src/core/components/ui/alert";
 import { Sheet } from "@/src/core/components/ui/sheet";
-import DynamicIcon from "@/src/core/components/commons/dynamic-icon";
+import { AddButton } from "@/src/core/components/ui/add-button";
 import { useApiAction } from "@/src/core/hooks/use-api-action";
 import { debtApi } from "@/src/core/debts/debt.api";
 
@@ -51,14 +51,7 @@ export default function DebtForm() {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="fixed bottom-20 right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-theme-accent text-gray-800 shadow-lg shadow-theme-accent/40 transition-transform active:scale-95 md:bottom-8 md:right-8"
-        aria-label="Tambah hutang atau piutang"
-      >
-        <DynamicIcon icon="ph:plus" fontSize="24px" />
-      </button>
+      <AddButton label="Tambah Hutang / Piutang" onClick={() => setOpen(true)} />
 
       <Sheet open={open} title="Tambah Hutang / Piutang" onClose={close}>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">

@@ -59,49 +59,59 @@ export default function ReportPanel({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="grid grid-cols-2 gap-2 rounded-xl bg-gray-100 p-1">
-        {PERIODS.map((option) => (
-          <button
-            key={option.value}
+      {/* Kontrol menumpuk di mobile, sebaris di layar lebar. */}
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex items-center gap-3">
+          <div className="grid grid-cols-2 gap-2 rounded-xl bg-gray-100 p-1 lg:w-52">
+            {PERIODS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => setPeriod(option.value)}
+                className={`rounded-lg px-3 py-2 text-sm font-bold transition-colors ${
+                  period === option.value
+                    ? "bg-white text-gray-800 shadow-sm"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+
+          <p className="hidden text-xs text-gray-500 lg:block">
+            Periode:{" "}
+            <span className="font-semibold text-gray-700">{periodLabel}</span>
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 lg:flex lg:shrink-0">
+          <Button
             type="button"
-            onClick={() => setPeriod(option.value)}
-            className={`rounded-lg py-2 text-sm font-bold transition-colors ${
-              period === option.value
-                ? "bg-white text-gray-800 shadow-sm"
-                : "text-gray-500"
-            }`}
+            variant="secondary"
+            disabled={preview.pending}
+            onClick={handlePreview}
           >
-            {option.label}
-          </button>
-        ))}
+            <DynamicIcon icon="ph:eye" fontSize="18px" />
+            {preview.pending ? "Memuat..." : file ? "Muat Ulang" : "Pratinjau"}
+          </Button>
+
+          <Button
+            type="button"
+            disabled={download.pending}
+            onClick={() => download.run(period, year, month)}
+          >
+            <DynamicIcon icon="ph:download-simple" fontSize="18px" />
+            {download.pending ? "Menyiapkan..." : "Download"}
+          </Button>
+        </div>
       </div>
 
-      <p className="text-xs text-gray-500">
+      <p className="text-xs text-gray-500 lg:hidden">
         Periode: <span className="font-semibold text-gray-700">{periodLabel}</span>
       </p>
 
       <ErrorAlert message={preview.error ?? download.error} />
-
-      <div className="grid grid-cols-2 gap-2">
-        <Button
-          type="button"
-          variant="secondary"
-          disabled={preview.pending}
-          onClick={handlePreview}
-        >
-          <DynamicIcon icon="ph:eye" fontSize="18px" />
-          {preview.pending ? "Memuat..." : file ? "Muat Ulang" : "Pratinjau"}
-        </Button>
-
-        <Button
-          type="button"
-          disabled={download.pending}
-          onClick={() => download.run(period, year, month)}
-        >
-          <DynamicIcon icon="ph:download-simple" fontSize="18px" />
-          {download.pending ? "Menyiapkan..." : "Download"}
-        </Button>
-      </div>
 
       {file && <PdfViewer file={file} />}
     </div>

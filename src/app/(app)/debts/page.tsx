@@ -3,6 +3,7 @@ import { requireAuthUser } from "@/src/core/auth/dal";
 import { debtService } from "@/src/core/debts/services/debt.service";
 import { reportService } from "@/src/core/reports/services/report.service";
 import { Card } from "@/src/core/components/ui/card";
+import { PageHeader } from "@/src/core/components/ui/page-header";
 import { EmptyState } from "@/src/core/components/ui/empty-state";
 import { Money } from "@/src/core/components/ui/money";
 import DebtCard from "./debt-card";
@@ -37,54 +38,75 @@ export default async function DebtsPage({
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-xl font-bold text-gray-800">Hutang &amp; Piutang</h1>
-        <p className="text-xs text-gray-400">Catat pinjaman masuk dan keluar</p>
-      </div>
+      <PageHeader
+        title="Hutang & Piutang"
+        subtitle="Catat pinjaman masuk dan keluar"
+      >
+        <div className="grid grid-cols-2 gap-2 rounded-xl bg-gray-100 p-1">
+          {TABS.map((tab) => (
+            <Link
+              key={tab.value}
+              href={`/debts?type=${tab.value}`}
+              className={`rounded-lg px-4 py-2 text-center text-sm font-bold transition-colors ${
+                active === tab.value
+                  ? "bg-white text-gray-800 shadow-sm"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              {tab.label}
+            </Link>
+          ))}
+        </div>
+        <DebtForm />
+      </PageHeader>
 
-      <div className="grid grid-cols-2 gap-2 rounded-xl bg-gray-100 p-1">
-        {TABS.map((tab) => (
-          <Link
-            key={tab.value}
-            href={`/debts?type=${tab.value}`}
-            className={`rounded-lg py-2 text-center text-sm font-bold transition-colors ${
-              active === tab.value ? "bg-white text-gray-800 shadow-sm" : "text-gray-500"
-            }`}
-          >
-            {tab.label}
-          </Link>
-        ))}
-      </div>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <Card className="col-span-2 border-theme-light-border bg-theme-light sm:col-span-1">
+          <p className="text-xs font-semibold text-gray-500">
+            {active === "RECEIVABLE" ? "Piutang" : "Hutang"} belum lunas
+          </p>
+          <p className="mt-1 text-xl font-bold sm:text-lg lg:text-xl">
+            <Money
+              value={outstanding}
+              tone={active === "RECEIVABLE" ? "income" : "expense"}
+            />
+          </p>
+        </Card>
 
-      <Card className="border-theme-light-border bg-theme-light">
-        <p className="text-xs font-semibold text-gray-500">
-          Total {active === "RECEIVABLE" ? "piutang" : "hutang"} belum lunas
-        </p>
-        <p className="mt-1 text-2xl font-bold">
-          <Money
-            value={outstanding}
-            tone={active === "RECEIVABLE" ? "income" : "expense"}
-          />
-        </p>
-      </Card>
+        <Card>
+          <p className="text-xs font-semibold text-gray-500">
+            Total Piutang ({summary.receivableCount})
+          </p>
+          <p className="mt-1 text-base font-bold sm:text-lg">
+            <Money value={summary.receivableOutstanding} tone="income" />
+          </p>
+        </Card>
+
+        <Card>
+          <p className="text-xs font-semibold text-gray-500">
+            Total Hutang ({summary.payableCount})
+          </p>
+          <p className="mt-1 text-base font-bold sm:text-lg">
+            <Money value={summary.payableOutstanding} tone="expense" />
+          </p>
+        </Card>
+      </div>
 
       {debts.length === 0 ? (
         <Card>
           <EmptyState
             icon="ph:handshake"
             title="Belum ada catatan"
-            description="Tekan tombol + untuk mencatat hutang atau piutang baru."
+            description="Gunakan tombol Tambah Hutang / Piutang untuk mencatat yang baru."
           />
         </Card>
       ) : (
-        <div className="flex flex-col gap-3">
+        <div className="grid items-start gap-3 lg:grid-cols-2 2xl:grid-cols-3">
           {debts.map((debt) => (
             <DebtCard key={debt.uuid} debt={debt} />
           ))}
         </div>
       )}
-
-      <DebtForm />
     </div>
   );
 }

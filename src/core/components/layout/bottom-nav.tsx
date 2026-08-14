@@ -45,27 +45,35 @@ export default function BottomNav() {
         </ul>
       </nav>
 
-      {/* Desktop: sidebar */}
-      <nav className="fixed inset-y-0 left-0 z-40 hidden w-56 border-r border-gray-100 bg-white px-3 pt-20 md:block">
-        <ul className="flex flex-col gap-1">
-          {ITEMS.map((item) => (
-            <li key={item.href}>
-              <Link
-                href={item.href}
-                aria-current={isActive(item.href) ? "page" : undefined}
-                className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors ${
-                  isActive(item.href)
-                    ? "bg-theme-light text-gray-900"
-                    : "text-gray-500 hover:bg-gray-50"
-                }`}
-              >
-                <DynamicIcon icon={item.icon} fontSize="18px" />
-                {item.label}
-              </Link>
-            </li>
-          ))}
-        </ul>
-      </nav>
+      {/* Desktop: sidebar tetap, sekaligus memuat brand */}
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-56 flex-col border-r border-gray-100 bg-white md:flex">
+        <div className="flex h-16 shrink-0 items-center px-5">
+          <Link href="/dashboard" className="font-logo text-xl font-bold text-gray-800">
+            Budgeting
+          </Link>
+        </div>
+
+        <nav className="flex-1 overflow-y-auto px-3 pb-4">
+          <ul className="flex flex-col gap-1">
+            {ITEMS.map((item) => (
+              <li key={item.href}>
+                <Link
+                  href={item.href}
+                  aria-current={isActive(item.href) ? "page" : undefined}
+                  className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors ${
+                    isActive(item.href)
+                      ? "bg-theme-light text-gray-900"
+                      : "text-gray-500 hover:bg-gray-50 hover:text-gray-800"
+                  }`}
+                >
+                  <DynamicIcon icon={item.icon} fontSize="18px" />
+                  {item.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      </aside>
     </>
   );
 }
