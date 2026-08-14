@@ -60,10 +60,22 @@ const select = {
 } satisfies Prisma.DebtSelect;
 
 /**
- * Hutang (PAYABLE) berarti uang keluar, piutang (RECEIVABLE) berarti uang
- * masuk — dipakai baik saat hutang/piutang dibuat maupun saat dibayar.
+ * Saat dicatat, arah uangnya berlawanan dengan intuisi namanya: berhutang
+ * (PAYABLE) justru menambah saldo karena uangnya diterima sekarang, sedangkan
+ * memberi piutang (RECEIVABLE) mengurangi saldo karena uangnya dikeluarkan.
  */
-const DEBT_TRANSACTION_TYPE: Record<DebtType, TransactionType> = {
+const DEBT_CREATE_TRANSACTION_TYPE: Record<DebtType, TransactionType> = {
+  PAYABLE: "INCOME",
+  RECEIVABLE: "EXPENSE",
+};
+
+/**
+ * Saat dibayar arahnya berkebalikan dari saat dicatat: melunasi hutang
+ * mengurangi saldo, menerima pembayaran piutang menambahnya. Dengan begitu
+ * satu siklus hutang penuh (dicatat lalu lunas) berjumlah nol, bukan
+ * terhitung dua kali.
+ */
+const DEBT_PAYMENT_TRANSACTION_TYPE: Record<DebtType, TransactionType> = {
   PAYABLE: "EXPENSE",
   RECEIVABLE: "INCOME",
 };
@@ -160,11 +172,12 @@ class DebtService {
   }
 
   /**
-   * Hutang/piutang baru langsung tercatat sebagai transaksi juga: hutang
-   * dianggap uang keluar, piutang uang masuk — atomik dengan pembuatan datanya.
+   * Hutang/piutang baru langsung tercatat sebagai transaksi juga: berhutang
+   * berarti uang masuk, memberi piutang berarti uang keluar — atomik dengan
+   * pembuatan datanya. Lihat `DEBT_CREATE_TRANSACTION_TYPE`.
    */
   async create(userId: number, input: DebtInput): Promise<DebtDTO> {
-    const transactionType = DEBT_TRANSACTION_TYPE[input.type];
+    const transactionType = DEBT_CREATE_TRANSACTION_TYPE[input.type];
 
     const row = await prisma.$transaction(async (tx) => {
       const debt = await tx.debt.create({
@@ -177,7 +190,8 @@ class DebtService {
           date: toDateOnly(input.date),
           dueDate: input.dueDate ? toDateOnly(input.dueDate) : null,
         },
-        select,
+        // `id` diperlukan untuk menautkan transaksi otomatisnya di bawah.
+        select: { ...select, id: true },
       });
 
       const categoryId = await resolveAutoCategoryId(
@@ -190,6 +204,7 @@ class DebtService {
         data: {
           userId,
           categoryId,
+          debtId: debt.id,
           type: transactionType,
           amount: new Prisma.Decimal(input.amount),
           note: autoTransactionNote(input.type, input.party, input.note),
@@ -214,7 +229,7 @@ class DebtService {
     input: DebtPaymentInput,
   ): Promise<DebtDTO> {
     const debt = await this.mustOwn(userId, uuid);
-    const transactionType = DEBT_TRANSACTION_TYPE[debt.type];
+    const transactionType = DEBT_PAYMENT_TRANSACTION_TYPE[debt.type];
 
     const row = await prisma.$transaction(async (tx) => {
       await tx.debtPayment.create({
@@ -236,6 +251,7 @@ class DebtService {
         data: {
           userId,
           categoryId,
+          debtId: debt.id,
           type: transactionType,
           amount: new Prisma.Decimal(input.amount),
           note: input.note?.trim() || null,

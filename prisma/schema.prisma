@@ -81,6 +81,10 @@ model Transaction {
   user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   categoryId Int?
   category   Category?       @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  // Terisi hanya untuk transaksi yang dibuat otomatis dari hutang/piutang,
+  // supaya ikut terhapus saat catatan hutangnya dihapus.
+  debtId     Int?
+  debt       Debt?           @relation(fields: [debtId], references: [id], onDelete: Cascade)
   type       TransactionType
   amount     Decimal         @db.Decimal(14, 2)
   note       String?
@@ -91,6 +95,7 @@ model Transaction {
   @@index([userId, occurredAt])
   @@index([userId, type])
   @@index([categoryId])
+  @@index([debtId])
 }
 
 model Debt {
@@ -109,7 +114,8 @@ model Debt {
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
 
-  payments DebtPayment[]
+  payments     DebtPayment[]
+  transactions Transaction[]
 
   @@index([userId, status])
   @@index([userId, type])
