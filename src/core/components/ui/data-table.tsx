@@ -139,7 +139,24 @@ export function DataTable<TData extends RowData>({
           )}
         </div>
 
-        {toolbar}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => query.refetch()}
+            disabled={query.isFetching}
+            aria-label="Muat ulang"
+            title="Muat ulang"
+            className="flex items-center justify-center rounded-xl border border-gray-200 bg-white p-2.5 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <DynamicIcon
+              icon="ph:arrow-clockwise"
+              fontSize="16px"
+              className={query.isFetching ? "animate-spin" : ""}
+            />
+          </button>
+
+          {toolbar}
+        </div>
       </div>
 
       {query.isError && (
