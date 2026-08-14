@@ -4,7 +4,7 @@ import { currentPeriod, monthLabel, MONTH_NAMES_ID } from "@/src/core/lib/date";
 import { Card, SectionTitle } from "@/src/core/components/ui/card";
 import { Money } from "@/src/core/components/ui/money";
 import PeriodSwitcher from "../dashboard/period-switcher";
-import DownloadReport from "./download-report";
+import ReportPanel from "./report-panel";
 
 type SearchParams = Promise<{ year?: string; month?: string }>;
 
@@ -39,18 +39,18 @@ export default async function ReportsPage({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-gray-800">Laporan</h1>
-          <p className="text-xs text-gray-400">Unduh rekap dalam bentuk PDF</p>
+          <p className="text-xs text-gray-400">Pratinjau dan unduh rekap PDF</p>
         </div>
         <PeriodSwitcher year={year} month={month} basePath="/reports" />
       </div>
 
       <Card>
-        <SectionTitle title="Unduh Laporan" />
-        <DownloadReport year={year} month={month} />
+        <SectionTitle title="Pratinjau & Unduh Laporan" />
+        <ReportPanel year={year} month={month} />
       </Card>
 
       <Card>
-        <SectionTitle title={`Pratinjau ${monthLabel(year, month)}`} />
+        <SectionTitle title={`Ringkasan ${monthLabel(year, month)}`} />
         <dl className="flex flex-col gap-2 text-sm">
           <div className="flex items-center justify-between">
             <dt className="text-gray-500">Pemasukan</dt>

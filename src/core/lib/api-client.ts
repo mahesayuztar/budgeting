@@ -105,6 +105,35 @@ async function request<T>(
 }
 
 /**
+ * Endpoint biner tetap membalas JSON ketika gagal (401, 422), jadi
+ * content-type ikut diperiksa — bukan hanya `response.ok`.
+ */
+async function requestBlob(
+  path: string,
+  options?: RequestOptions,
+): Promise<Blob> {
+  let response: Response;
+
+  try {
+    response = await fetch(buildUrl(path, options?.params), {
+      credentials: "same-origin",
+      signal: options?.signal,
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") throw error;
+    throw new ApiError(NETWORK_ERROR, 0);
+  }
+
+  const contentType = response.headers.get("content-type") ?? "";
+
+  if (!response.ok || contentType.includes("application/json")) {
+    throw toApiError(response, await parseJson(response), path);
+  }
+
+  return response.blob();
+}
+
+/**
  * Satu-satunya pintu keluar HTTP di sisi klien. Komponen tidak pernah
  * menyentuh `fetch`, `res.ok`, atau `res.json()`.
  */
@@ -121,27 +150,12 @@ export const api = {
   delete: <T>(path: string, options?: RequestOptions) =>
     request<T>("DELETE", path, undefined, options),
 
-  /** Unduh file biner (PDF). Respons JSON berarti error, bukan file. */
+  /** Ambil file biner (PDF) sebagai Blob — dipakai untuk pratinjau di layar. */
+  blob: (path: string, options?: RequestOptions) => requestBlob(path, options),
+
+  /** Unduh file biner (PDF) langsung ke perangkat. */
   async download(path: string, filename: string, options?: RequestOptions) {
-    let response: Response;
-
-    try {
-      response = await fetch(buildUrl(path, options?.params), {
-        credentials: "same-origin",
-        signal: options?.signal,
-      });
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") throw error;
-      throw new ApiError(NETWORK_ERROR, 0);
-    }
-
-    const contentType = response.headers.get("content-type") ?? "";
-
-    if (!response.ok || contentType.includes("application/json")) {
-      throw toApiError(response, await parseJson(response), path);
-    }
-
-    const blob = await response.blob();
+    const blob = await requestBlob(path, options);
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
 
