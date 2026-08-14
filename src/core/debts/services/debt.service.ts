@@ -1,6 +1,11 @@
 import "server-only";
 
-import { Prisma, type DebtStatus, type DebtType } from "@prisma/client";
+import {
+  Prisma,
+  type DebtStatus,
+  type DebtType,
+  type TransactionType,
+} from "@prisma/client";
 import { prisma } from "@/src/core/lib/prisma";
 import { NotFoundError } from "@/src/core/lib/errors";
 import { toAmount } from "@/src/core/lib/money";
@@ -34,6 +39,7 @@ export type DebtDTO = {
   remaining: number;
   note: string | null;
   dueDate: string | null;
+  date: string | null;
   status: DebtStatus;
   payments: DebtPaymentDTO[];
 };
@@ -45,12 +51,51 @@ const select = {
   amount: true,
   note: true,
   dueDate: true,
+  date: true,
   status: true,
   payments: {
     select: { uuid: true, amount: true, paidAt: true, note: true },
     orderBy: { paidAt: "desc" },
   },
 } satisfies Prisma.DebtSelect;
+
+/**
+ * Hutang (PAYABLE) berarti uang keluar, piutang (RECEIVABLE) berarti uang
+ * masuk — dipakai baik saat hutang/piutang dibuat maupun saat dibayar.
+ */
+const DEBT_TRANSACTION_TYPE: Record<DebtType, TransactionType> = {
+  PAYABLE: "EXPENSE",
+  RECEIVABLE: "INCOME",
+};
+
+/** Kategori bawaan yang sudah ada di `DEFAULT_CATEGORIES`, dipakai apa adanya
+ *  supaya tidak menambah kategori baru khusus hutang/piutang. */
+const AUTO_CATEGORY_NAME: Record<TransactionType, string> = {
+  EXPENSE: "Tagihan",
+  INCOME: "Pemasukan Lain",
+};
+
+async function resolveAutoCategoryId(
+  tx: Prisma.TransactionClient,
+  userId: number,
+  type: TransactionType,
+): Promise<number | null> {
+  const category = await tx.category.findFirst({
+    where: { userId, type, name: AUTO_CATEGORY_NAME[type] },
+    select: { id: true },
+  });
+  return category?.id ?? null;
+}
+
+function autoTransactionNote(
+  type: DebtType,
+  party: string,
+  note?: string | null,
+) {
+  const label = type === "PAYABLE" ? "Berhutang ke" : "Piutang dari";
+  const trimmed = note?.trim();
+  return trimmed ? `${label} ${party} - ${trimmed}` : `${label} ${party}`;
+}
 
 type DebtRow = Prisma.DebtGetPayload<{ select: typeof select }>;
 
@@ -70,6 +115,7 @@ function toDTO(row: DebtRow): DebtDTO {
     remaining: Math.max(amount - paidAmount, 0),
     note: row.note,
     dueDate: row.dueDate ? row.dueDate.toISOString().slice(0, 10) : null,
+    date: row.date ? row.date.toISOString().slice(0, 10) : null,
     status: row.status,
     payments: row.payments.map((payment) => ({
       uuid: payment.uuid,
@@ -113,25 +159,54 @@ class DebtService {
     return buildPage(rows, limit, toDTO, (row) => encodeCursor([row.id]));
   }
 
+  /**
+   * Hutang/piutang baru langsung tercatat sebagai transaksi juga: hutang
+   * dianggap uang keluar, piutang uang masuk — atomik dengan pembuatan datanya.
+   */
   async create(userId: number, input: DebtInput): Promise<DebtDTO> {
-    const row = await prisma.debt.create({
-      data: {
+    const transactionType = DEBT_TRANSACTION_TYPE[input.type];
+
+    const row = await prisma.$transaction(async (tx) => {
+      const debt = await tx.debt.create({
+        data: {
+          userId,
+          type: input.type,
+          party: input.party,
+          amount: new Prisma.Decimal(input.amount),
+          note: input.note?.trim() || null,
+          date: toDateOnly(input.date),
+          dueDate: input.dueDate ? toDateOnly(input.dueDate) : null,
+        },
+        select,
+      });
+
+      const categoryId = await resolveAutoCategoryId(
+        tx,
         userId,
-        type: input.type,
-        party: input.party,
-        amount: new Prisma.Decimal(input.amount),
-        note: input.note?.trim() || null,
-        dueDate: input.dueDate ? toDateOnly(input.dueDate) : null,
-      },
-      select,
+        transactionType,
+      );
+
+      await tx.transaction.create({
+        data: {
+          userId,
+          categoryId,
+          type: transactionType,
+          amount: new Prisma.Decimal(input.amount),
+          note: autoTransactionNote(input.type, input.party, input.note),
+          occurredAt: toDateOnly(input.date),
+        },
+      });
+
+      return debt;
     });
 
     return toDTO(row);
   }
 
   /**
-   * Pembayaran dan perubahan status harus atomik: kalau tidak, dua pembayaran
-   * bersamaan bisa membuat hutang lunas tapi status tetap OPEN.
+   * Pembayaran, transaksi otomatis, dan perubahan status harus atomik: kalau
+   * tidak, dua pembayaran bersamaan bisa membuat hutang lunas tapi status
+   * tetap OPEN, atau transaksinya tercatat tanpa pembayarannya.
    */
   async addPayment(
     userId: number,
@@ -139,6 +214,7 @@ class DebtService {
     input: DebtPaymentInput,
   ): Promise<DebtDTO> {
     const debt = await this.mustOwn(userId, uuid);
+    const transactionType = DEBT_TRANSACTION_TYPE[debt.type];
 
     const row = await prisma.$transaction(async (tx) => {
       await tx.debtPayment.create({
@@ -147,6 +223,23 @@ class DebtService {
           amount: new Prisma.Decimal(input.amount),
           paidAt: toDateOnly(input.paidAt),
           note: input.note?.trim() || null,
+        },
+      });
+
+      const categoryId = await resolveAutoCategoryId(
+        tx,
+        userId,
+        transactionType,
+      );
+
+      await tx.transaction.create({
+        data: {
+          userId,
+          categoryId,
+          type: transactionType,
+          amount: new Prisma.Decimal(input.amount),
+          note: input.note?.trim() || null,
+          occurredAt: toDateOnly(input.paidAt),
         },
       });
 
@@ -179,7 +272,7 @@ class DebtService {
   private async mustOwn(userId: number, uuid: string) {
     const debt = await prisma.debt.findFirst({
       where: { uuid, userId },
-      select: { id: true, amount: true },
+      select: { id: true, amount: true, type: true },
     });
     if (!debt) throw new NotFoundError("Data hutang/piutang tidak ditemukan.");
     return debt;

@@ -9,6 +9,7 @@ export const debtSchema = z.object({
     .positive("Jumlah harus lebih dari 0.")
     .max(999_999_999_999, "Jumlah terlalu besar."),
   note: z.string().trim().max(255).nullish(),
+  date: z.iso.date("Tanggal tidak valid."),
   dueDate: z.iso.date("Tanggal jatuh tempo tidak valid.").nullish(),
 });
 

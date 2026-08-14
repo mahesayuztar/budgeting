@@ -103,6 +103,7 @@ model Debt {
   amount    Decimal    @db.Decimal(14, 2)
   note      String?
   dueDate   DateTime?  @db.Date
+  date      DateTime?  @db.Date
   status    DebtStatus @default(OPEN)
   settledAt DateTime?
   createdAt DateTime   @default(now())

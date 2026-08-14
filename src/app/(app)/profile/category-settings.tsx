@@ -8,7 +8,7 @@ import { Input } from "@/src/core/components/ui/field";
 import { ErrorAlert } from "@/src/core/components/ui/alert";
 import { EmptyState } from "@/src/core/components/ui/empty-state";
 import { Sheet } from "@/src/core/components/ui/sheet";
-import { useApiAction } from "@/src/core/hooks/use-api-action";
+import { useApiMutation } from "@/src/core/hooks/use-api-mutation";
 import { categoryApi } from "@/src/core/categories/category.api";
 import type { CategoryUsageDTO } from "@/src/core/categories/services/category.service";
 import type { CategoryInput } from "@/src/core/categories/validators/category.validator";
@@ -49,7 +49,7 @@ function CategoryRow({
   onEdit: () => void;
   onDeleted: () => void;
 }) {
-  const { run, pending } = useApiAction(categoryApi.remove);
+  const { run, pending } = useApiMutation(categoryApi.remove);
 
   async function handleDelete() {
     const warning = category.transactionCount
@@ -117,7 +117,7 @@ export default function CategorySettings({
     [],
   );
 
-  const { run, pending, error, fieldErrors, reset } = useApiAction(save);
+  const { run, pending, error, fieldErrors, reset } = useApiMutation(save);
 
   function openCreate(type: TransactionType) {
     setEditingUuid(null);

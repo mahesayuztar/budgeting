@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Button } from "@/src/core/components/ui/button";
 import { Input } from "@/src/core/components/ui/field";
 import { ErrorAlert, SuccessAlert } from "@/src/core/components/ui/alert";
-import { useApiAction } from "@/src/core/hooks/use-api-action";
+import { useApiMutation } from "@/src/core/hooks/use-api-mutation";
 import { profileApi } from "@/src/core/profile/profile.api";
 
 const EMPTY = { currentPassword: "", newPassword: "", confirmPassword: "" };
@@ -14,7 +14,7 @@ export default function PasswordForm() {
   const [visible, setVisible] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  const { run, pending, error, fieldErrors } = useApiAction(
+  const { run, pending, error, fieldErrors } = useApiMutation(
     profileApi.changePassword,
   );
 
@@ -37,59 +37,53 @@ export default function PasswordForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      <ErrorAlert message={error} />
-      {saved && (
-        <SuccessAlert message="Password diperbarui. Sesi di perangkat lain telah dikeluarkan." />
-      )}
+    <form onSubmit={handleSubmit} className="flex flex-1 flex-col">
+      <div className="flex flex-col gap-4">
+        <ErrorAlert message={error} />
+        {saved && (
+          <SuccessAlert message="Password diperbarui. Sesi di perangkat lain telah dikeluarkan." />
+        )}
 
-      <Input
-        label="Password Saat Ini"
-        type={visible ? "text" : "password"}
-        required
-        autoComplete="current-password"
-        placeholder="••••••••"
-        value={form.currentPassword}
-        onChange={update("currentPassword")}
-        errors={fieldErrors.currentPassword}
-      />
-
-      <Input
-        label="Password Baru"
-        type={visible ? "text" : "password"}
-        required
-        autoComplete="new-password"
-        placeholder="••••••••"
-        hint="Minimal 8 karakter, memuat huruf dan angka."
-        value={form.newPassword}
-        onChange={update("newPassword")}
-        errors={fieldErrors.newPassword}
-      />
-
-      <Input
-        label="Ulangi Password Baru"
-        type={visible ? "text" : "password"}
-        required
-        autoComplete="new-password"
-        placeholder="••••••••"
-        value={form.confirmPassword}
-        onChange={update("confirmPassword")}
-        errors={fieldErrors.confirmPassword}
-      />
-
-      <label className="flex items-center gap-2 text-xs font-medium text-gray-500">
-        <input
-          type="checkbox"
-          checked={visible}
-          onChange={(event) => setVisible(event.target.checked)}
-          className="h-4 w-4 rounded border-gray-300 accent-theme-primary"
+        <Input
+          label="Password Saat Ini"
+          type={visible ? "text" : "password"}
+          required
+          autoComplete="current-password"
+          placeholder="••••••••"
+          value={form.currentPassword}
+          onChange={update("currentPassword")}
+          errors={fieldErrors.currentPassword}
         />
-        Tampilkan password
-      </label>
 
-      <Button type="submit" fullWidth disabled={pending}>
-        {pending ? "Menyimpan..." : "Ubah Password"}
-      </Button>
+        <Input
+          label="Password Baru"
+          type={visible ? "text" : "password"}
+          required
+          autoComplete="new-password"
+          placeholder="••••••••"
+          hint="Minimal 8 karakter, memuat huruf dan angka."
+          value={form.newPassword}
+          onChange={update("newPassword")}
+          errors={fieldErrors.newPassword}
+        />
+
+        <Input
+          label="Ulangi Password Baru"
+          type={visible ? "text" : "password"}
+          required
+          autoComplete="new-password"
+          placeholder="••••••••"
+          value={form.confirmPassword}
+          onChange={update("confirmPassword")}
+          errors={fieldErrors.confirmPassword}
+        />
+      </div>
+
+      <div className="mt-auto border-t border-gray-100 pt-4">
+        <Button type="submit" fullWidth disabled={pending}>
+          {pending ? "Menyimpan..." : "Ubah Password"}
+        </Button>
+      </div>
     </form>
   );
 }

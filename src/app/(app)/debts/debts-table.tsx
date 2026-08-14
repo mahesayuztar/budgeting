@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import DynamicIcon from "@/src/core/components/commons/dynamic-icon";
 import { Money } from "@/src/core/components/ui/money";
@@ -13,7 +12,7 @@ import { Button } from "@/src/core/components/ui/button";
 import { Input } from "@/src/core/components/ui/field";
 import { ErrorAlert } from "@/src/core/components/ui/alert";
 import { Sheet } from "@/src/core/components/ui/sheet";
-import { useApiAction } from "@/src/core/hooks/use-api-action";
+import { useApiMutation } from "@/src/core/hooks/use-api-mutation";
 import { debtApi } from "@/src/core/debts/debt.api";
 import type { DebtDTO } from "@/src/core/debts/services/debt.service";
 import type { DebtType } from "@prisma/client";
@@ -26,11 +25,14 @@ function RowActions({ debt, onDone }: { debt: DebtDTO; onDone: () => void }) {
   const [paidAt, setPaidAt] = useState(() => toDateInputValue(new Date()));
   const [note, setNote] = useState("");
 
-  const payment = useApiAction(
+  const payment = useApiMutation(
     (input: Parameters<typeof debtApi.addPayment>[1]) =>
       debtApi.addPayment(debt.uuid, input),
+    { invalidateKeys: [["debts"]] },
   );
-  const removal = useApiAction(debtApi.remove);
+  const removal = useApiMutation(debtApi.remove, {
+    invalidateKeys: [["debts"]],
+  });
 
   function close() {
     setOpen(false);
@@ -133,13 +135,12 @@ export default function DebtsTable({
   initialPage: Page<DebtDTO>;
 }) {
   const router = useRouter();
-  const queryClient = useQueryClient();
 
   const columns = useMemo<AppColumnDef<DebtDTO>[]>(() => {
-    const refresh = () => {
-      queryClient.invalidateQueries({ queryKey: ["debts"] });
-      router.refresh();
-    };
+    // Invalidate ["debts"] sudah otomatis lewat useApiMutation di
+    // RowActions; di sini cukup refresh kartu ringkasan yang di-render
+    // server (di luar cache React Query).
+    const refresh = () => router.refresh();
 
     return [
       {
@@ -261,7 +262,7 @@ export default function DebtsTable({
         meta: { className: "w-20 text-right", headerClassName: "w-20" },
       },
     ];
-  }, [queryClient, router]);
+  }, [router]);
 
   return (
     <DataTable

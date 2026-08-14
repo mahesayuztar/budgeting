@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import DynamicIcon from "@/src/core/components/commons/dynamic-icon";
 import { Money } from "@/src/core/components/ui/money";
@@ -9,14 +8,16 @@ import {
   DataTable,
   type AppColumnDef,
 } from "@/src/core/components/ui/data-table";
-import { useApiAction } from "@/src/core/hooks/use-api-action";
+import { useApiMutation } from "@/src/core/hooks/use-api-mutation";
 import { transactionApi } from "@/src/core/transactions/transaction.api";
 import type { TransactionDTO } from "@/src/core/transactions/services/transaction.service";
 import type { Page } from "@/src/core/lib/pagination";
 import { formatDateID, formatDateShort } from "@/src/core/lib/date";
 
 function DeleteButton({ uuid, onDone }: { uuid: string; onDone: () => void }) {
-  const { run, pending } = useApiAction(transactionApi.remove);
+  const { run, pending } = useApiMutation(transactionApi.remove, {
+    invalidateKeys: [["transactions"]],
+  });
 
   return (
     <button
@@ -44,13 +45,12 @@ export default function TransactionsTable({
   initialPage: Page<TransactionDTO>;
 }) {
   const router = useRouter();
-  const queryClient = useQueryClient();
 
   const columns = useMemo<AppColumnDef<TransactionDTO>[]>(() => {
-    const refresh = () => {
-      queryClient.invalidateQueries({ queryKey: ["transactions"] });
-      router.refresh();
-    };
+    // Invalidate ["transactions"] sudah otomatis lewat useApiMutation di
+    // DeleteButton; di sini cukup refresh kartu ringkasan yang di-render
+    // server (di luar cache React Query).
+    const refresh = () => router.refresh();
 
     return [
       {
@@ -153,7 +153,7 @@ export default function TransactionsTable({
         meta: { className: "w-10 text-right", headerClassName: "w-10" },
       },
     ];
-  }, [queryClient, router]);
+  }, [router]);
 
   return (
     <DataTable

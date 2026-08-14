@@ -110,7 +110,16 @@ export function DataTable<TData extends RowData>({
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   const isInitialLoading = query.isPending;
-  const isEmpty = !isInitialLoading && rows.length === 0;
+  // Refetch yang dipicu invalidateQueries setelah CRUD (bukan muat awal,
+  // bukan infinite scroll, bukan pergantian kata pencarian yang sudah
+  // ditandai lewat isPlaceholderData) -- list-nya tampil sebagai skeleton
+  // selagi data barunya datang.
+  const isRevalidating =
+    query.isFetching &&
+    !isInitialLoading &&
+    !isFetchingNextPage &&
+    !query.isPlaceholderData;
+  const isEmpty = !isInitialLoading && !isRevalidating && rows.length === 0;
 
   return (
     <div className="flex flex-col gap-3">
@@ -175,7 +184,7 @@ export function DataTable<TData extends RowData>({
         </div>
       )}
 
-      {isInitialLoading && <TableSkeleton />}
+      {(isInitialLoading || isRevalidating) && <TableSkeleton />}
 
       {isEmpty && (
         <EmptyState
@@ -189,7 +198,7 @@ export function DataTable<TData extends RowData>({
         />
       )}
 
-      {rows.length > 0 && (
+      {!isRevalidating && rows.length > 0 && (
         <div
           className={`-mx-4 overflow-x-auto px-4 transition-opacity ${
             query.isPlaceholderData ? "opacity-60" : "opacity-100"

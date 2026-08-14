@@ -23,7 +23,10 @@ export default async function ProfilePage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <PageHeader title="Profil" subtitle="Kelola akun dan pengaturan aplikasi" />
+      <PageHeader
+        title="Profil"
+        subtitle="Kelola akun dan pengaturan aplikasi"
+      />
 
       <Card className="border-theme-light-border bg-theme-light">
         <div className="flex items-center gap-4">
@@ -32,7 +35,9 @@ export default async function ProfilePage() {
           </span>
 
           <div className="min-w-0">
-            <p className="truncate text-lg font-bold text-gray-800">{user.name}</p>
+            <p className="truncate text-lg font-bold text-gray-800">
+              {user.name}
+            </p>
             <p className="truncate text-xs text-gray-500">@{user.username}</p>
             <p className="mt-1 flex items-center gap-1.5 truncate text-xs text-gray-500">
               <DynamicIcon icon="ph:envelope-simple" fontSize="14px" />
@@ -43,12 +48,12 @@ export default async function ProfilePage() {
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
+        <Card className="flex flex-col">
           <SectionTitle title="Informasi Akun" />
           <ProfileForm name={user.name} username={user.username} />
         </Card>
 
-        <Card>
+        <Card className="flex flex-col">
           <SectionTitle title="Ubah Password" />
           <PasswordForm />
         </Card>
@@ -56,8 +61,6 @@ export default async function ProfilePage() {
 
       <Card>
         <SectionTitle title="Kategori" />
-        {/* Kategori adalah satu-satunya master data yang dipegang pengguna,
-            jadi pengaturannya ditaruh di halaman profil, bukan halaman sendiri. */}
         <p className="mb-4 text-xs text-gray-400">
           Kategori dipakai untuk mengelompokkan transaksi. Menghapus kategori
           tidak menghapus transaksinya.
@@ -66,7 +69,7 @@ export default async function ProfilePage() {
       </Card>
 
       <Card>
-        <SectionTitle title="Sesi" />
+        <SectionTitle title="Logout" />
         <p className="mb-4 text-xs text-gray-400">
           Keluar akan mengakhiri sesi di perangkat ini saja.
         </p>

@@ -7,7 +7,7 @@ import { Input, Select } from "@/src/core/components/ui/field";
 import { ErrorAlert } from "@/src/core/components/ui/alert";
 import { Sheet } from "@/src/core/components/ui/sheet";
 import { AddButton } from "@/src/core/components/ui/add-button";
-import { useApiAction } from "@/src/core/hooks/use-api-action";
+import { useApiMutation } from "@/src/core/hooks/use-api-mutation";
 import { transactionApi } from "@/src/core/transactions/transaction.api";
 import type { CategoryDTO } from "@/src/core/categories/services/category.service";
 import { toDateInputValue } from "@/src/core/lib/date";
@@ -27,8 +27,9 @@ export default function TransactionForm({
   const [note, setNote] = useState("");
   const [occurredAt, setOccurredAt] = useState(() => toDateInputValue(new Date()));
 
-  const { run, pending, error, fieldErrors, reset } = useApiAction(
+  const { run, pending, error, fieldErrors, reset } = useApiMutation(
     transactionApi.create,
+    { invalidateKeys: [["transactions"]] },
   );
 
   const visibleCategories = useMemo(
