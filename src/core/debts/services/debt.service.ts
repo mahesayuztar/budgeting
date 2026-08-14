@@ -85,6 +85,7 @@ const DEBT_PAYMENT_TRANSACTION_TYPE: Record<DebtType, TransactionType> = {
 const AUTO_CATEGORY_NAME: Record<TransactionType, string> = {
   EXPENSE: "Tagihan",
   INCOME: "Pemasukan Lain",
+  TRANSFER: "Transfer"
 };
 
 async function resolveAutoCategoryId(
