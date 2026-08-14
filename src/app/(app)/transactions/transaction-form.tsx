@@ -11,19 +11,23 @@ import { useApiMutation } from "@/src/core/hooks/use-api-mutation";
 import { transactionApi } from "@/src/core/transactions/transaction.api";
 import type { CategoryDTO } from "@/src/core/categories/services/category.service";
 import { toDateInputValue } from "@/src/core/lib/date";
+import { AccountDTO } from "@/src/core/accounts/services/account.service";
 
-type TransactionType = "INCOME" | "EXPENSE";
+type TransactionType = "INCOME" | "EXPENSE" | "TRANSFER";
 
 export default function TransactionForm({
   categories,
+  accounts,
 }: {
   categories: CategoryDTO[];
+  accounts: AccountDTO[];
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [type, setType] = useState<TransactionType>("EXPENSE");
   const [amount, setAmount] = useState("");
   const [categoryUuid, setCategoryUuid] = useState("");
+  const [accountUuid, setAccountUuid] = useState(accounts?.[0]?.uuid ?? "");
   const [note, setNote] = useState("");
   const [occurredAt, setOccurredAt] = useState(() => toDateInputValue(new Date()));
 
@@ -73,8 +77,8 @@ export default function TransactionForm({
 
       <Sheet open={open} title="Tambah Transaksi" onClose={close}>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <div className="grid grid-cols-2 gap-2 rounded-xl bg-gray-100 p-1">
-            {(["EXPENSE", "INCOME"] as const).map((option) => (
+          <div className="grid grid-cols-3 gap-2 rounded-xl bg-gray-100 p-1">
+            {(["EXPENSE", "INCOME", "TRANSFER"] as const).map((option) => (
               <button
                 key={option}
                 type="button"
@@ -85,7 +89,7 @@ export default function TransactionForm({
                     : "text-gray-500"
                 }`}
               >
-                {option === "EXPENSE" ? "Pengeluaran" : "Pemasukan"}
+                {option === "EXPENSE" ? "Pengeluaran" : option === "INCOME" ? "Pemasukan" : "Transfer"}
               </button>
             ))}
           </div>
@@ -115,6 +119,20 @@ export default function TransactionForm({
             {visibleCategories.map((category) => (
               <option key={category.uuid} value={category.uuid}>
                 {category.name}
+              </option>
+            ))}
+          </Select>
+
+          <Select
+            label="Akun Rekening"
+            value={accountUuid}
+            onChange={(event) => setAccountUuid(event.target.value)}
+            errors={fieldErrors.accountUuid}
+          >
+            <option value="">Tanpa akun</option>
+            {accounts.map((account) => (
+              <option key={account.uuid} value={account.uuid}>
+                {account.name}
               </option>
             ))}
           </Select>

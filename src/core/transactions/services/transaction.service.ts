@@ -100,6 +100,7 @@ class TransactionService {
 
   async create(userId: number, input: TransactionInput): Promise<TransactionDTO> {
     const categoryId = await resolveCategoryId(userId, input.categoryUuid);
+    const accountId = await resolveAccountId(userId, input.accountUuid);
 
     const row = await prisma.transaction.create({
       data: {
@@ -207,6 +208,18 @@ async function resolveCategoryId(userId: number, categoryUuid?: string | null) {
 
   if (!category) throw new NotFoundError("Kategori tidak ditemukan.");
   return category.id;
+}
+
+async function resolveAccountId(userId: number, accountUuid?: string | null) {
+  if (!accountUuid) return null;
+
+  const account = await prisma.account.findFirst({
+    where: { uuid: accountUuid, userId },
+    select: { id: true },
+  });
+
+  if (!account) throw new NotFoundError("Akun tidak ditemukan.");
+  return account.id;
 }
 
 export const transactionService = new TransactionService();

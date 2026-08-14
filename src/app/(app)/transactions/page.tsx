@@ -9,6 +9,7 @@ import { Money } from "@/src/core/components/ui/money";
 import PeriodSwitcher from "../dashboard/period-switcher";
 import TransactionForm from "./transaction-form";
 import TransactionsTable from "./transactions-table";
+import { accountService } from "@/src/core/accounts/services/account.service";
 
 type SearchParams = Promise<{ year?: string; month?: string }>;
 
@@ -33,9 +34,10 @@ export default async function TransactionsPage({
 
   // Total dihitung dari agregasi database, bukan dari baris yang termuat —
   // dengan infinite scroll hanya sebagian baris ada di klien.
-  const [initialPage, categories, summary] = await Promise.all([
+  const [initialPage, categories, accounts, summary] = await Promise.all([
     transactionService.list(user.id, { year, month }),
     categoryService.list(user.id),
+    accountService.list(user.id),
     reportService.getMonthlySummary(user.id, year, month),
   ]);
 
@@ -43,7 +45,7 @@ export default async function TransactionsPage({
     <div className="flex flex-col gap-4">
       <PageHeader title="Transaksi" subtitle={monthLabel(year, month)}>
         <PeriodSwitcher year={year} month={month} basePath="/transactions" />
-        <TransactionForm categories={categories} />
+        <TransactionForm categories={categories} accounts={accounts} />
       </PageHeader>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">

@@ -7,6 +7,8 @@ import ProfileForm from "./profile-form";
 import PasswordForm from "./password-form";
 import CategorySettings from "./category-settings";
 import LogoutButton from "./logout-button";
+import AccountSettings from "./account-settings";
+import { accountService } from "@/src/core/accounts/services/account.service";
 
 function initials(name: string) {
   return name
@@ -20,6 +22,7 @@ function initials(name: string) {
 export default async function ProfilePage() {
   const user = await requireAuthUser();
   const categories = await categoryService.listWithUsage(user.id);
+  const accounts = await accountService.listWithUsage(user.id);
 
   return (
     <div className="flex flex-col gap-4">
@@ -66,6 +69,14 @@ export default async function ProfilePage() {
           tidak menghapus transaksinya.
         </p>
         <CategorySettings categories={categories} />
+      </Card>
+
+      <Card>
+        <SectionTitle title="Akun Rekening" />
+        <p className="mb-4 text-xs text-gray-400">
+          Akun rekening dipakai untuk mengelompokkan transaksi. Menghapus akun rekening tidak menghapus transaksinya.
+        </p>
+        <AccountSettings accounts={accounts} />
       </Card>
 
       <Card>

@@ -11,6 +11,7 @@ datasource db {
 enum TransactionType {
   INCOME
   EXPENSE
+  TRANSFER
 }
 
 enum DebtType {
