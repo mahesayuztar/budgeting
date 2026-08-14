@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "postinstall": "prisma generate",
+    "prebuild":"prisma format && prisma db push && prisma generate",
     "build": "prisma migrate deploy && next build",
     "prisma": "prisma format && prisma db push && prisma generate",
     "backfill:accounts": "tsx scripts/seed-accounts.ts",
