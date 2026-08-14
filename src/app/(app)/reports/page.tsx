@@ -41,12 +41,11 @@ export default async function ReportsPage({
         <PeriodSwitcher year={year} month={month} basePath="/reports" />
       </PageHeader>
 
-      <div className="grid items-start gap-4 xl:grid-cols-3">
-        {/* Pratinjau butuh ruang terlebar; angka-angka menemani di sampingnya. */}
-        <Card className="min-w-0 xl:col-span-2">
-          <SectionTitle title="Pratinjau & Unduh Laporan" />
-          <ReportPanel year={year} month={month} />
-        </Card>
+      <div className="grid flex-1 gap-4 xl:grid-cols-3">
+  <Card className="min-w-0 xl:col-span-2">
+    <SectionTitle title="Pratinjau & Unduh Laporan" />
+    <ReportPanel year={year} month={month} />
+  </Card>
 
         {/* min-w-0 supaya kolom grid boleh menyusut di layar sempit. */}
         <Card className="min-w-0">

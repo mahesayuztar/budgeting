@@ -110,32 +110,36 @@ export default function TransactionForm({
           />
 
           <Select
-            label="Kategori"
-            value={categoryUuid}
-            onChange={(event) => setCategoryUuid(event.target.value)}
-            errors={fieldErrors.categoryUuid}
-          >
-            <option value="">Tanpa kategori</option>
-            {visibleCategories.map((category) => (
-              <option key={category.uuid} value={category.uuid}>
-                {category.name}
-              </option>
-            ))}
-          </Select>
+  label="Kategori"
+  value={categoryUuid}
+  onChange={setCategoryUuid}
+  errors={fieldErrors.categoryUuid}
+  placeholder="Tanpa kategori"
+  searchPlaceholder="Cari kategori..."
+  options={visibleCategories.map((category) => ({
+    value: category.uuid,
+    label: category.name,
+  }))}
+/>
 
-          <Select
-            label="Akun Rekening"
-            value={accountUuid}
-            onChange={(event) => setAccountUuid(event.target.value)}
-            errors={fieldErrors.accountUuid}
-          >
-            <option value="">Tanpa akun</option>
-            {accounts.map((account) => (
-              <option key={account.uuid} value={account.uuid}>
-                {account.name}
-              </option>
-            ))}
-          </Select>
+<Select
+  label="Akun Rekening"
+  value={accountUuid}
+  onChange={setAccountUuid}
+  errors={fieldErrors.accountUuid}
+  placeholder="Pilih akun"
+  searchPlaceholder="Cari akun..."
+  options={accounts.map((account) => ({
+    value: account.uuid,
+    label: account.name,
+    description:
+      account.type === "BANK"
+        ? [account.bankName, account.accountNumber]
+            .filter(Boolean)
+            .join(" • ")
+        : "Cash",
+  }))}
+/>
 
           <Input
             label="Tanggal"
