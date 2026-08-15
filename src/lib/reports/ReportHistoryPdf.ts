@@ -184,7 +184,7 @@ export async function buildDebtHistoryPdf(context: HistoryReportContext, rows: D
     totalPaid += _row.paidAmount;
     totalRemaining += _row.remaining;
 
-    cursor.text(_row.date ? formatDateShort(_row.date) : '-', { x: columns[0].x, size: 9 });
+    cursor.text(formatDateShort(_row.date), { x: columns[0].x, size: 9 });
     cursor.text(truncate(_row.party, fonts.regular, 9, columns[1].width), { x: columns[1].x, size: 9 });
     cursor.text(_row.dueDate ? formatDateShort(_row.dueDate) : '-', { x: columns[2].x, size: 9 });
     cursor.text(formatAmountPlain(_row.amount), { x: columns[3].x, width: columns[3].width, align: 'right', size: 9 });

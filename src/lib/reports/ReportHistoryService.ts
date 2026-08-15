@@ -24,7 +24,7 @@ export type TransactionHistoryRow = {
 };
 
 export type DebtHistoryRow = {
-  date: string | null;
+  date: string;
   dueDate: string | null;
   party: string;
   amount: number;
@@ -150,8 +150,11 @@ class ReportHistoryService {
 
   /**
    * Menyusun riwayat hutang atau piutang yang dicatat pada satu rentang, beserta
-   * jumlah yang sudah terbayar dan sisanya. Catatan lama yang belum memiliki
-   * tanggal tidak ikut terambil karena rentangnya disaring lewat kolom tanggal.
+   * jumlah yang sudah terbayar dan sisanya. Rentang disaring lewat kolom tanggal
+   * catatan, dan catatan lama yang tanggalnya masih kosong jatuh ke waktu
+   * pembuatannya supaya tetap ikut terlaporkan. Pengurutan dikerjakan setelah
+   * data terambil karena kuncinya adalah tanggal efektif itu, yang tidak dapat
+   * diurutkan langsung oleh database.
    * @param {number} userId - ID pengguna pemilik catatan.
    * @param {DebtType} type - Jenis catatan, PAYABLE untuk hutang atau RECEIVABLE untuk piutang.
    * @param {Date} start - Awal rentang sebagai batas inklusif.
@@ -160,9 +163,14 @@ class ReportHistoryService {
    */
   async getDebtHistory(userId: number, type: DebtType, start: Date, end: Date): Promise<DebtHistoryRow[]> {
     const rows = await prisma.debt.findMany({
-      where: { userId, type, date: { gte: start, lt: end } },
+      where: {
+        userId,
+        type,
+        OR: [{ date: { gte: start, lt: end } }, { date: null, createdAt: { gte: start, lt: end } }],
+      },
       select: {
         date: true,
+        createdAt: true,
         dueDate: true,
         party: true,
         amount: true,
@@ -170,24 +178,25 @@ class ReportHistoryService {
         note: true,
         payments: { select: { amount: true } },
       },
-      orderBy: [{ date: 'asc' }, { id: 'asc' }],
     });
 
-    return rows.map(_row => {
-      const amount = toAmount(_row.amount);
-      const paidAmount = _row.payments.reduce((_total, _payment) => _total + toAmount(_payment.amount), 0);
+    return rows
+      .map(_row => {
+        const amount = toAmount(_row.amount);
+        const paidAmount = _row.payments.reduce((_total, _payment) => _total + toAmount(_payment.amount), 0);
 
-      return {
-        date: toDateText(_row.date),
-        dueDate: toDateText(_row.dueDate),
-        party: _row.party,
-        amount,
-        paidAmount,
-        remaining: Math.max(amount - paidAmount, 0),
-        status: _row.status,
-        note: _row.note,
-      };
-    });
+        return {
+          date: (_row.date ?? _row.createdAt).toISOString().slice(0, 10),
+          dueDate: toDateText(_row.dueDate),
+          party: _row.party,
+          amount,
+          paidAmount,
+          remaining: Math.max(amount - paidAmount, 0),
+          status: _row.status,
+          note: _row.note,
+        };
+      })
+      .sort((_left, _right) => _left.date.localeCompare(_right.date));
   }
 
   /**
