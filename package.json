@@ -5,12 +5,14 @@
   "scripts": {
     "dev": "next dev",
     "postinstall": "prisma generate",
-    "prebuild":"prisma format && prisma db push && prisma generate",
+    "prebuild": "prisma format && prisma db push && prisma generate",
     "build": "prisma migrate deploy && next build",
     "prisma": "prisma format && prisma db push && prisma generate",
     "backfill:accounts": "tsx scripts/seed-accounts.ts",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "dependencies": {
     "@iconify/react": "^6.0.2",
@@ -37,6 +39,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
+    "prettier": "^3.9.6",
     "tailwindcss": "^4",
     "tsx": "^4.23.12",
     "typescript": "^5"

@@ -1,12 +1,17 @@
-import { handleApiError, ok } from "@/src/core/lib/api-response";
-import { authService } from "@/src/core/auth/services/auth.service";
-import { registerSchema } from "@/src/core/auth/validators/register.validator";
+import { handleApiError, ok } from '@/src/lib/ApiResponse';
+import { authService } from '@/src/lib/auth/AuthService';
+import { registerSchema } from '@/src/lib/auth/RegisterValidator';
 
+/**
+ * Mendaftarkan pengguna baru beserta kategori dan akun bawaannya, lalu langsung
+ * memasang cookie sesi.
+ * @param {Request} request - Permintaan HTTP berisi data pendaftaran.
+ * @returns {Promise<Response>} Data pengguna yang baru terdaftar, atau respons error.
+ */
 export async function POST(request: Request) {
   try {
     const input = registerSchema.parse(await request.json());
-    const user = await authService.register(input);
-    return ok(user, 201);
+    return ok(await authService.register(input), 201);
   } catch (error) {
     return handleApiError(error);
   }

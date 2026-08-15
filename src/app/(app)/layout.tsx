@@ -1,26 +1,34 @@
-import type { ReactNode } from "react";
-import { requireAuthUser } from "@/src/core/auth/dal";
-import AppHeader from "@/src/core/components/layout/app-header";
-import BottomNav from "@/src/core/components/layout/bottom-nav";
-import QueryProvider from "@/src/core/lib/query-provider";
+import type { ReactNode } from 'react';
+import { requireAuthUser } from '@/src/lib/auth/AuthDal';
+import AppHeader from '@/src/components/layout/AppHeader';
+import BottomNav from '@/src/components/layout/BottomNav';
+import QueryProvider from '@/src/context/QueryProvider';
 
-export default async function AppLayout({ children }: { children: ReactNode }) {
-  // Pertahanan sebenarnya ada di sini; proxy hanya cek optimistik.
+type AppLayoutOwnProps = {
+  children: ReactNode;
+};
+
+/**
+ * Kerangka halaman untuk seluruh rute yang menuntut pengguna sudah masuk.
+ * Pemeriksaan sesi di sini adalah pertahanan yang sebenarnya, sedangkan proxy
+ * hanya melakukan pemeriksaan optimistik. Kanvas halaman diberi warna bertint
+ * agar kartu putih di atasnya terbaca mengambang, dengan tint hampir netral
+ * karena krem penuh terlalu pekat untuk area seluas ini. Padding kiri konten
+ * pada layar lebar menyisakan ruang selebar sidebar.
+ * @param {AppLayoutOwnProps} props - Props komponen.
+ * @param {ReactNode} props.children - Isi halaman yang sedang dibuka.
+ * @returns {ReactNode} Kerangka halaman beserta navigasi dan kepala aplikasinya.
+ */
+export default async function AppLayout({ children }: AppLayoutOwnProps) {
   const user = await requireAuthUser();
 
   return (
     <QueryProvider>
-      {/* Layout kartu-berat butuh kanvas bertint supaya kartu putih terbaca
-          "mengambang" (pola Stripe/Mercury). Tint-nya surface yang hampir
-          netral — krem penuh terlalu pekat untuk area seluas ini. */}
       <div className="min-h-screen bg-theme-surface">
         <BottomNav />
         <AppHeader userName={user.name} />
 
-        {/* pl-56 = lebar sidebar; konten memakai sisa layar tanpa max-width. */}
-        <main className="px-4 pb-28 pt-4 md:pb-10 md:pl-64 md:pr-8 md:pt-6">
-          {children}
-        </main>
+        <main className="px-4 pb-28 pt-4 md:pb-10 md:pl-64 md:pr-8 md:pt-6">{children}</main>
       </div>
     </QueryProvider>
   );

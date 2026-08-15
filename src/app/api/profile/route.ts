@@ -1,8 +1,13 @@
-import { handleApiError, ok } from "@/src/core/lib/api-response";
-import { requireApiUser } from "@/src/core/auth/dal";
-import { profileService } from "@/src/core/profile/services/profile.service";
-import { profileSchema } from "@/src/core/profile/validators/profile.validator";
+import { handleApiError, ok } from '@/src/lib/ApiResponse';
+import { requireApiUser } from '@/src/lib/auth/AuthDal';
+import { profileService } from '@/src/lib/profile/ProfileService';
+import { profileSchema } from '@/src/lib/profile/ProfileValidator';
 
+/**
+ * Memperbarui nama dan username pengguna yang sedang masuk.
+ * @param {Request} request - Permintaan HTTP berisi data profil.
+ * @returns {Promise<Response>} Data pengguna setelah diperbarui, atau respons error.
+ */
 export async function PATCH(request: Request) {
   try {
     const user = await requireApiUser();

@@ -1,39 +1,29 @@
-import { requireAuthUser } from "@/src/core/auth/dal";
-import { reportService } from "@/src/core/reports/services/report.service";
-import { currentPeriod, monthLabel, MONTH_NAMES_ID } from "@/src/core/lib/date";
-import { Card, SectionTitle } from "@/src/core/components/ui/card";
-import { PageHeader } from "@/src/core/components/ui/page-header";
-import { Money } from "@/src/core/components/ui/money";
-import PeriodSwitcher from "../dashboard/period-switcher";
-import ReportPanel from "./report-panel";
+import { requireAuthUser } from '@/src/lib/auth/AuthDal';
+import { reportService } from '@/src/lib/reports/ReportService';
+import { monthLabel, MONTH_NAMES_ID, resolvePeriod } from '@/src/helpers/DateHelper';
+import { Card, SectionTitle } from '@/src/components/ui/Card';
+import { PageHeader } from '@/src/components/ui/PageHeader';
+import { Money } from '@/src/components/ui/Money';
+import PeriodSwitcher from '@/src/app/(app)/dashboard/PeriodSwitcher';
+import ReportPanel from './ReportPanel';
 
-type SearchParams = Promise<{ year?: string; month?: string }>;
+type ReportsPageOwnProps = {
+  searchParams: Promise<{ year?: string; month?: string }>;
+};
 
-function resolvePeriod(raw: { year?: string; month?: string }) {
-  const fallback = currentPeriod();
-  const year = Number(raw.year);
-  const month = Number(raw.month);
-
-  return {
-    year:
-      Number.isInteger(year) && year >= 2000 && year <= 2100 ? year : fallback.year,
-    month:
-      Number.isInteger(month) && month >= 1 && month <= 12 ? month : fallback.month,
-  };
-}
-
-export default async function ReportsPage({
-  searchParams,
-}: {
-  searchParams: SearchParams;
-}) {
+/**
+ * Halaman laporan: pratinjau dan unduh rekap PDF, ringkasan periode terpilih,
+ * serta rekap dua belas bulan dalam satu tahun. Kolom kartu diberi `min-w-0`
+ * supaya grid boleh menyusut dan tabelnya tetap dapat digulir di layar sempit.
+ * @param {ReportsPageOwnProps} props - Props halaman.
+ * @param {Promise<{ year?: string; month?: string }>} props.searchParams - Periode yang diminta lewat query string.
+ * @returns {ReactNode} Halaman laporan keuangan.
+ */
+export default async function ReportsPage({ searchParams }: ReportsPageOwnProps) {
   const user = await requireAuthUser();
   const { year, month } = resolvePeriod(await searchParams);
 
-  const [monthly, yearly] = await Promise.all([
-    reportService.getMonthlySummary(user.id, year, month),
-    reportService.getYearlySummary(user.id, year),
-  ]);
+  const [monthly, yearly] = await Promise.all([reportService.getMonthlySummary(user.id, year, month), reportService.getYearlySummary(user.id, year)]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -42,12 +32,11 @@ export default async function ReportsPage({
       </PageHeader>
 
       <div className="grid flex-1 gap-4 xl:grid-cols-3">
-  <Card className="min-w-0 xl:col-span-2">
-    <SectionTitle title="Pratinjau & Unduh Laporan" />
-    <ReportPanel year={year} month={month} />
-  </Card>
+        <Card className="min-w-0 xl:col-span-2">
+          <SectionTitle title="Pratinjau & Unduh Laporan" />
+          <ReportPanel year={year} month={month} />
+        </Card>
 
-        {/* min-w-0 supaya kolom grid boleh menyusut di layar sempit. */}
         <Card className="min-w-0">
           <SectionTitle title={`Ringkasan ${monthLabel(year, month)}`} />
           <dl className="flex flex-col gap-2 text-sm">
@@ -71,9 +60,7 @@ export default async function ReportsPage({
             </div>
             <div className="flex items-center justify-between">
               <dt className="text-gray-500">Jumlah transaksi</dt>
-              <dd className="font-semibold text-gray-700">
-                {monthly.transactionCount}
-              </dd>
+              <dd className="font-semibold text-gray-700">{monthly.transactionCount}</dd>
             </div>
           </dl>
         </Card>
@@ -92,24 +79,20 @@ export default async function ReportsPage({
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {yearly.months.map((point) => (
-                <tr key={point.month}>
+              {yearly.months.map(_point => (
+                <tr key={`reports_page__month_${_point.month}`}>
                   <td className="py-2 text-xs font-semibold text-gray-600">
-                    <span className="sm:hidden">
-                      {MONTH_NAMES_ID[point.month - 1].slice(0, 3)}
-                    </span>
-                    <span className="hidden sm:inline">
-                      {MONTH_NAMES_ID[point.month - 1]}
-                    </span>
+                    <span className="sm:hidden">{MONTH_NAMES_ID[_point.month - 1].slice(0, 3)}</span>
+                    <span className="hidden sm:inline">{MONTH_NAMES_ID[_point.month - 1]}</span>
                   </td>
                   <td className="py-2 text-right text-xs">
-                    <Money value={point.income} tone="income" />
+                    <Money value={_point.income} tone="income" />
                   </td>
                   <td className="py-2 text-right text-xs">
-                    <Money value={point.expense} tone="expense" />
+                    <Money value={_point.expense} tone="expense" />
                   </td>
                   <td className="py-2 text-right text-xs font-semibold">
-                    <Money value={point.net} tone="auto" />
+                    <Money value={_point.net} tone="auto" />
                   </td>
                 </tr>
               ))}

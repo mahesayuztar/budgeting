@@ -1,11 +1,18 @@
-import { handleApiError, ok } from "@/src/core/lib/api-response";
-import { requireApiUser } from "@/src/core/auth/dal";
-import { categoryService } from "@/src/core/categories/services/category.service";
-import { categorySchema } from "@/src/core/categories/validators/category.validator";
+import { handleApiError, ok } from '@/src/lib/ApiResponse';
+import { requireApiUser } from '@/src/lib/auth/AuthDal';
+import { categoryService } from '@/src/lib/categories/CategoryService';
+import { categorySchema } from '@/src/lib/categories/CategoryValidator';
 
-type Context = { params: Promise<{ uuid: string }> };
+type RouteContext = { params: Promise<{ uuid: string }> };
 
-export async function PATCH(request: Request, { params }: Context) {
+/**
+ * Memperbarui satu kategori milik pengguna yang sedang masuk.
+ * @param {Request} request - Permintaan HTTP berisi data kategori.
+ * @param {RouteContext} context - Konteks route Next.js.
+ * @param {Promise<{ uuid: string }>} context.params - UUID kategori pada segmen dinamis.
+ * @returns {Promise<Response>} Kategori setelah diperbarui, atau respons error.
+ */
+export async function PATCH(request: Request, { params }: RouteContext) {
   try {
     const user = await requireApiUser();
     const { uuid } = await params;
@@ -17,7 +24,14 @@ export async function PATCH(request: Request, { params }: Context) {
   }
 }
 
-export async function DELETE(_request: Request, { params }: Context) {
+/**
+ * Menghapus satu kategori milik pengguna yang sedang masuk.
+ * @param {Request} _request - Permintaan HTTP, tidak dipakai karena tidak ada body.
+ * @param {RouteContext} context - Konteks route Next.js.
+ * @param {Promise<{ uuid: string }>} context.params - UUID kategori pada segmen dinamis.
+ * @returns {Promise<Response>} Penanda bahwa kategori sudah dihapus, atau respons error.
+ */
+export async function DELETE(_request: Request, { params }: RouteContext) {
   try {
     const user = await requireApiUser();
     const { uuid } = await params;

@@ -1,8 +1,14 @@
-import { handleApiError, ok } from "@/src/core/lib/api-response";
-import { requireApiUser } from "@/src/core/auth/dal";
-import { profileService } from "@/src/core/profile/services/profile.service";
-import { changePasswordSchema } from "@/src/core/profile/validators/profile.validator";
+import { handleApiError, ok } from '@/src/lib/ApiResponse';
+import { requireApiUser } from '@/src/lib/auth/AuthDal';
+import { profileService } from '@/src/lib/profile/ProfileService';
+import { changePasswordSchema } from '@/src/lib/profile/ProfileValidator';
 
+/**
+ * Mengganti password pengguna yang sedang masuk dan mencabut sesi di perangkat
+ * lainnya.
+ * @param {Request} request - Permintaan HTTP berisi password lama dan password baru.
+ * @returns {Promise<Response>} Penanda bahwa password sudah diganti, atau respons error.
+ */
 export async function PATCH(request: Request) {
   try {
     const user = await requireApiUser();

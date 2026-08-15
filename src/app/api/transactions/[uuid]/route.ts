@@ -1,12 +1,19 @@
-import { handleApiError, ok } from "@/src/core/lib/api-response";
-import { requireApiUser } from "@/src/core/auth/dal";
-import { transactionService } from "@/src/core/transactions/services/transaction.service";
-import { transactionSchema } from "@/src/core/transactions/validators/transaction.validator";
+import { handleApiError, ok } from '@/src/lib/ApiResponse';
+import { requireApiUser } from '@/src/lib/auth/AuthDal';
+import { transactionService } from '@/src/lib/transactions/TransactionService';
+import { transactionSchema } from '@/src/lib/transactions/TransactionValidator';
 
-// Next 16: `params` adalah Promise.
-type Context = { params: Promise<{ uuid: string }> };
+type RouteContext = { params: Promise<{ uuid: string }> };
 
-export async function PATCH(request: Request, { params }: Context) {
+/**
+ * Memperbarui satu transaksi milik pengguna yang sedang masuk. Sejak Next 16,
+ * `params` diterima sebagai Promise sehingga perlu di-await lebih dulu.
+ * @param {Request} request - Permintaan HTTP berisi data transaksi.
+ * @param {RouteContext} context - Konteks route Next.js.
+ * @param {Promise<{ uuid: string }>} context.params - UUID transaksi pada segmen dinamis.
+ * @returns {Promise<Response>} Transaksi setelah diperbarui, atau respons error.
+ */
+export async function PATCH(request: Request, { params }: RouteContext) {
   try {
     const user = await requireApiUser();
     const { uuid } = await params;
@@ -18,7 +25,14 @@ export async function PATCH(request: Request, { params }: Context) {
   }
 }
 
-export async function DELETE(_request: Request, { params }: Context) {
+/**
+ * Menghapus satu transaksi milik pengguna yang sedang masuk.
+ * @param {Request} _request - Permintaan HTTP, tidak dipakai karena tidak ada body.
+ * @param {RouteContext} context - Konteks route Next.js.
+ * @param {Promise<{ uuid: string }>} context.params - UUID transaksi pada segmen dinamis.
+ * @returns {Promise<Response>} Penanda bahwa transaksi sudah dihapus, atau respons error.
+ */
+export async function DELETE(_request: Request, { params }: RouteContext) {
   try {
     const user = await requireApiUser();
     const { uuid } = await params;

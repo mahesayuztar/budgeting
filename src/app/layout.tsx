@@ -1,38 +1,46 @@
-import { Plus_Jakarta_Sans } from "next/font/google";
-import type { Metadata, Viewport } from "next";
-import localFont from "next/font/local";
-import RouteLoadingOverlay from "@/src/core/components/layout/route-loading-overlay";
-import "./globals.css";
+import type { ReactNode } from 'react';
+import type { Metadata, Viewport } from 'next';
+import { Plus_Jakarta_Sans } from 'next/font/google';
+import localFont from 'next/font/local';
+import RouteLoadingOverlay from '@/src/components/layout/RouteLoadingOverlay';
+import '../styles/globals.css';
 
-const jakarta = Plus_Jakarta_Sans({
-  subsets: ["latin"],
-  variable: "--font-jakarta",
+const jakartaFont = Plus_Jakarta_Sans({
+  subsets: ['latin'],
+  variable: '--font-jakarta',
 });
 
-const fontBrand = localFont({
-  src: "./fonts/ClashDisplay-Bold.otf",
-  variable: "--font-clash",
-  display: "swap",
+const brandFont = localFont({
+  src: './fonts/ClashDisplay-Bold.otf',
+  variable: '--font-clash',
+  display: 'swap',
 });
 
 export const metadata: Metadata = {
-  title: "Budgeting",
-  description: "Kelola pemasukan, pengeluaran, dan hutang-piutang pribadi.",
+  title: 'Budgeting',
+  description: 'Kelola pemasukan, pengeluaran, dan hutang-piutang pribadi.',
 };
 
 export const viewport: Viewport = {
-  width: "device-width",
+  width: 'device-width',
   initialScale: 1,
-  themeColor: "#ffffff",
+  themeColor: '#ffffff',
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+type RootLayoutOwnProps = {
+  children: ReactNode;
+};
+
+/**
+ * Kerangka terluar aplikasi: memasang variabel font, gaya global, dan overlay
+ * pemuatan halaman yang berlaku untuk seluruh rute.
+ * @param {RootLayoutOwnProps} props - Props komponen.
+ * @param {ReactNode} props.children - Isi halaman yang sedang dibuka.
+ * @returns {ReactNode} Dokumen HTML aplikasi beserta isinya.
+ */
+export default function RootLayout({ children }: RootLayoutOwnProps) {
   return (
-    <html lang="id" className={`${fontBrand.variable} ${jakarta.variable}`}>
+    <html lang="id" className={`${brandFont.variable} ${jakartaFont.variable}`}>
       <body className="font-sans antialiased">
         <RouteLoadingOverlay />
         {children}

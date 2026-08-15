@@ -1,13 +1,19 @@
-import { handleApiError, ok } from "@/src/core/lib/api-response";
-import { requireApiUser } from "@/src/core/auth/dal";
-import { categoryService } from "@/src/core/categories/services/category.service";
-import { categorySchema } from "@/src/core/categories/validators/category.validator";
-import { z } from "zod";
+import { z } from 'zod';
+import { handleApiError, ok } from '@/src/lib/ApiResponse';
+import { requireApiUser } from '@/src/lib/auth/AuthDal';
+import { categoryService } from '@/src/lib/categories/CategoryService';
+import { categorySchema } from '@/src/lib/categories/CategoryValidator';
 
 const querySchema = z.object({
-  type: z.enum(["INCOME", "EXPENSE", "TRANSFER"]).optional(),
+  type: z.enum(['INCOME', 'EXPENSE', 'TRANSFER']).optional(),
 });
 
+/**
+ * Mengambil daftar kategori milik pengguna yang sedang masuk, dapat disaring
+ * per tipe kategori.
+ * @param {Request} request - Permintaan HTTP beserta query params penyaringnya.
+ * @returns {Promise<Response>} Daftar kategori milik pengguna, atau respons error.
+ */
 export async function GET(request: Request) {
   try {
     const user = await requireApiUser();
@@ -20,6 +26,11 @@ export async function GET(request: Request) {
   }
 }
 
+/**
+ * Membuat kategori baru milik pengguna yang sedang masuk.
+ * @param {Request} request - Permintaan HTTP berisi data kategori.
+ * @returns {Promise<Response>} Kategori yang baru dibuat, atau respons error.
+ */
 export async function POST(request: Request) {
   try {
     const user = await requireApiUser();
