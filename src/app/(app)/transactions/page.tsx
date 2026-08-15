@@ -8,7 +8,7 @@ import { Card } from '@/src/components/ui/Card';
 import { PageHeader } from '@/src/components/ui/PageHeader';
 import { Money } from '@/src/components/ui/Money';
 import PeriodSwitcher from '@/src/app/(app)/dashboard/PeriodSwitcher';
-import TransactionForm from './TransactionForm';
+import TransactionCreateButton from './TransactionCreateButton';
 import TransactionsTable from './TransactionsTable';
 
 type TransactionsPageOwnProps = {
@@ -38,7 +38,7 @@ export default async function TransactionsPage({ searchParams }: TransactionsPag
     <div className="flex flex-col gap-4">
       <PageHeader title="Transaksi" subtitle={monthLabel(year, month)}>
         <PeriodSwitcher year={year} month={month} basePath="/transactions" />
-        <TransactionForm categories={categories} accounts={accounts} />
+        <TransactionCreateButton categories={categories} accounts={accounts} />
       </PageHeader>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -63,7 +63,7 @@ export default async function TransactionsPage({ searchParams }: TransactionsPag
       </div>
 
       <Card>
-        <TransactionsTable year={year} month={month} initialPage={initialPage} />
+        <TransactionsTable year={year} month={month} initialPage={initialPage} categories={categories} accounts={accounts} />
       </Card>
     </div>
   );

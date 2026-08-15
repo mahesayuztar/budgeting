@@ -2,9 +2,9 @@ import 'server-only';
 
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
 import { formatAmountPlain } from '@/src/helpers/MoneyHelper';
-import { formatDateShort, MONTH_NAMES_ID, monthLabel } from '@/src/helpers/DateHelper';
+import { dateRangeLabel, formatDateShort, MONTH_NAMES_ID, monthLabel } from '@/src/helpers/DateHelper';
 import type { TransactionDTO } from '@/src/lib/transactions/TransactionService';
-import type { MonthlySummary, YearlySummary } from './ReportService';
+import type { MonthlySummary, PeriodSummary, WeeklySummary, YearlySummary } from './ReportService';
 
 const A4_SIZE = { width: 595.28, height: 841.89 };
 const MARGIN = 40;
@@ -32,9 +32,23 @@ type ReportTextOptions = {
 
 type ReportSummaryRow = { label: string; value: number; tone?: 'auto' };
 
+type PeriodReportData = {
+  userName: string;
+  title: string;
+  periodLabel: string;
+  summary: PeriodSummary;
+  transactions: TransactionDTO[];
+};
+
 export type MonthlyReportData = {
   userName: string;
   summary: MonthlySummary;
+  transactions: TransactionDTO[];
+};
+
+export type WeeklyReportData = {
+  userName: string;
+  summary: WeeklySummary;
   transactions: TransactionDTO[];
 };
 
@@ -289,15 +303,19 @@ function drawTableHead(cursor: Cursor, columns: ReportColumns) {
 }
 
 /**
- * Menyusun berkas PDF laporan bulanan: ringkasan nilai, rincian pengeluaran per
- * kategori, dan tabel seluruh transaksi pada periode tersebut.
- * @param {MonthlyReportData} data - Data laporan bulanan.
+ * Menyusun berkas PDF laporan satu periode: ringkasan nilai, rincian
+ * pengeluaran per kategori, dan tabel seluruh transaksinya. Tata letaknya
+ * sama untuk setiap periode yang isinya berupa daftar transaksi, sehingga
+ * laporan bulanan dan mingguan cukup membedakan judul serta label periodenya.
+ * @param {PeriodReportData} data - Data laporan satu periode.
  * @param {string} data.userName - Nama pemilik laporan.
- * @param {MonthlySummary} data.summary - Ringkasan nilai periode tersebut.
+ * @param {string} data.title - Judul laporan yang dicetak di kepala dokumen.
+ * @param {string} data.periodLabel - Label periode laporan yang dicetak di kepala dokumen.
+ * @param {PeriodSummary} data.summary - Ringkasan nilai periode tersebut.
  * @param {TransactionDTO[]} data.transactions - Seluruh transaksi pada periode tersebut.
  * @returns {Promise<Uint8Array>} Isi berkas PDF yang siap dikirim ke klien.
  */
-export async function buildMonthlyReportPdf(data: MonthlyReportData) {
+async function buildPeriodReportPdf(data: PeriodReportData) {
   const doc = await PDFDocument.create();
 
   const fonts: ReportFonts = {
@@ -308,7 +326,7 @@ export async function buildMonthlyReportPdf(data: MonthlyReportData) {
   const cursor = new Cursor(doc, fonts);
   const { summary, transactions } = data;
 
-  drawHeader(cursor, 'Ringkasan Bulanan', monthLabel(summary.year, summary.month), data.userName);
+  drawHeader(cursor, data.title, data.periodLabel, data.userName);
 
   drawSummaryPanel(cursor, [
     { label: 'Total Pemasukan', value: summary.income },
@@ -382,6 +400,42 @@ export async function buildMonthlyReportPdf(data: MonthlyReportData) {
 
   cursor.stampFooters(new Date());
   return doc.save();
+}
+
+/**
+ * Menyusun berkas PDF laporan bulanan.
+ * @param {MonthlyReportData} data - Data laporan bulanan.
+ * @param {string} data.userName - Nama pemilik laporan.
+ * @param {MonthlySummary} data.summary - Ringkasan nilai bulan tersebut.
+ * @param {TransactionDTO[]} data.transactions - Seluruh transaksi pada bulan tersebut.
+ * @returns {Promise<Uint8Array>} Isi berkas PDF yang siap dikirim ke klien.
+ */
+export async function buildMonthlyReportPdf(data: MonthlyReportData) {
+  return buildPeriodReportPdf({
+    userName: data.userName,
+    title: 'Ringkasan Bulanan',
+    periodLabel: monthLabel(data.summary.year, data.summary.month),
+    summary: data.summary,
+    transactions: data.transactions,
+  });
+}
+
+/**
+ * Menyusun berkas PDF laporan mingguan berisi tujuh hari terakhir.
+ * @param {WeeklyReportData} data - Data laporan mingguan.
+ * @param {string} data.userName - Nama pemilik laporan.
+ * @param {WeeklySummary} data.summary - Ringkasan nilai rentang tujuh hari tersebut.
+ * @param {TransactionDTO[]} data.transactions - Seluruh transaksi pada rentang tersebut.
+ * @returns {Promise<Uint8Array>} Isi berkas PDF yang siap dikirim ke klien.
+ */
+export async function buildWeeklyReportPdf(data: WeeklyReportData) {
+  return buildPeriodReportPdf({
+    userName: data.userName,
+    title: 'Ringkasan Mingguan',
+    periodLabel: dateRangeLabel(data.summary.startDate, data.summary.endDate),
+    summary: data.summary,
+    transactions: data.transactions,
+  });
 }
 
 /**

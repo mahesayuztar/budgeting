@@ -1,19 +1,18 @@
 'use client';
 
-import { useMemo, useState, type FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
+import { useCallback, useMemo, useState, type FormEvent } from 'react';
 import { Button } from '@/src/components/ui/Button';
 import { Input, Select } from '@/src/components/ui/Field';
 import { ErrorAlert } from '@/src/components/ui/Alert';
 import { Sheet } from '@/src/components/ui/Sheet';
-import { AddButton } from '@/src/components/ui/AddButton';
 import { useApiMutation } from '@/src/hooks/useApiMutation';
 import { transactionApi } from '@/src/lib/transactions/TransactionApi';
-import { toDateInputValue } from '@/src/helpers/DateHelper';
+import { toTransactionInput, type TransactionFormState } from '@/src/lib/transactions/TransactionFormState';
 import type { CategoryDTO } from '@/src/lib/categories/CategoryService';
 import type { AccountDTO } from '@/src/lib/accounts/AccountService';
+import type { TransactionInput } from '@/src/lib/transactions/TransactionValidator';
 
-type TransactionType = 'INCOME' | 'EXPENSE' | 'TRANSFER';
+type TransactionType = TransactionFormState['type'];
 
 const TRANSACTION_TYPE_OPTIONS: ReadonlyArray<{ value: TransactionType; label: string }> = [
   { value: 'EXPENSE', label: 'Pengeluaran' },
@@ -24,133 +23,131 @@ const TRANSACTION_TYPE_OPTIONS: ReadonlyArray<{ value: TransactionType; label: s
 type TransactionFormOwnProps = {
   categories: CategoryDTO[];
   accounts: AccountDTO[];
+  editingUuid: string | null;
+  initialState: TransactionFormState;
+  onClose: () => void;
+  onSaved: () => void;
 };
 
 /**
- * Form pencatatan transaksi baru dalam bentuk panel yang dipicu tombol tambah.
- * Daftar kategori disaring mengikuti jenis transaksi yang dipilih, dan pilihan
- * kategori direset saat jenisnya berganti supaya kategori dari jenis lain tidak
- * ikut terbawa. Setelah tersimpan, halaman disegarkan agar kartu ringkasan yang
- * dirender di server ikut memperbarui angkanya.
+ * Panel isian transaksi yang dipakai untuk dua mode sekaligus: menambah saat
+ * `editingUuid` bernilai null, dan mengubah saat berisi uuid. Komponen ini
+ * terkontrol penuh oleh pemanggilnya, dan panel dianggap terbuka selama ia
+ * dirender, sehingga pemanggil cukup memasangnya secara kondisional dan state
+ * isian selalu segar tanpa perlu disinkronkan lewat useEffect. Daftar kategori
+ * disaring mengikuti jenis transaksi, dan pilihan kategori dilepas saat
+ * jenisnya berganti supaya kategori dari jenis lain tidak ikut terbawa.
  * @param {TransactionFormOwnProps} props - Props komponen.
  * @param {CategoryDTO[]} props.categories - Seluruh kategori milik pengguna.
  * @param {AccountDTO[]} props.accounts - Seluruh akun aktif milik pengguna.
- * @returns {ReactNode} Tombol tambah beserta panel form transaksinya.
+ * @param {string | null} props.editingUuid - UUID transaksi yang diubah, atau null untuk transaksi baru.
+ * @param {TransactionFormState} props.initialState - Nilai awal isian saat panel dibuka.
+ * @param {() => void} props.onClose - Dijalankan saat panel diminta ditutup.
+ * @param {() => void} props.onSaved - Dijalankan setelah transaksi berhasil disimpan.
+ * @returns {ReactNode} Panel isian transaksi.
  */
-export default function TransactionForm({ categories, accounts }: TransactionFormOwnProps) {
-  const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const [type, setType] = useState<TransactionType>('EXPENSE');
-  const [amount, setAmount] = useState('');
-  const [categoryUuid, setCategoryUuid] = useState('');
-  const [accountUuid, setAccountUuid] = useState(accounts?.[0]?.uuid ?? '');
-  const [note, setNote] = useState('');
-  const [occurredAt, setOccurredAt] = useState(() => toDateInputValue(new Date()));
+export default function TransactionForm({ categories, accounts, editingUuid, initialState, onClose, onSaved }: TransactionFormOwnProps) {
+  const [form, setForm] = useState<TransactionFormState>(initialState);
 
-  const { run, pending, error, fieldErrors, reset } = useApiMutation(transactionApi.create, { invalidateKeys: [['transactions']] });
+  const save = useCallback((uuid: string | null, input: TransactionInput) => (uuid ? transactionApi.update(uuid, input) : transactionApi.create(input)), []);
 
-  const visibleCategories = useMemo(() => categories.filter(_category => _category.type === type), [categories, type]);
+  const { run, pending, error, fieldErrors } = useApiMutation(save, { invalidateKeys: [['transactions']] });
 
-  function handleClose() {
-    setOpen(false);
-    reset();
-  }
+  const visibleCategories = useMemo(() => categories.filter(_category => _category.type === form.type), [categories, form.type]);
 
-  function setTransactionType(next: TransactionType) {
-    setType(next);
-    setCategoryUuid('');
+  function setTransactionType(type: TransactionType) {
+    setForm(_previous => ({ ..._previous, type, categoryUuid: null }));
   }
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
 
-    const created = await run({
-      type,
-      amount: Number(amount),
-      categoryUuid: categoryUuid || null,
-      note: note || null,
-      occurredAt,
-    });
+    const saved = await run(editingUuid, toTransactionInput(form));
+    if (!saved) return;
 
-    if (!created) return;
-
-    setAmount('');
-    setNote('');
-    setCategoryUuid('');
-    handleClose();
-    router.refresh();
+    onSaved();
   }
 
   return (
-    <>
-      <AddButton label="Tambah Transaksi" onClick={() => setOpen(true)} />
+    <Sheet open title={editingUuid ? 'Ubah Transaksi' : 'Tambah Transaksi'} onClose={onClose}>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <div className="grid grid-cols-3 gap-2 rounded-xl bg-gray-100 p-1">
+          {TRANSACTION_TYPE_OPTIONS.map(_option => (
+            <button
+              key={`transaction_form__type_${_option.value}`}
+              type="button"
+              onClick={() => setTransactionType(_option.value)}
+              className={`rounded-lg py-2 text-sm font-bold transition-colors ${form.type === _option.value ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'}`}
+            >
+              {_option.label}
+            </button>
+          ))}
+        </div>
 
-      <Sheet open={open} title="Tambah Transaksi" onClose={handleClose}>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <div className="grid grid-cols-3 gap-2 rounded-xl bg-gray-100 p-1">
-            {TRANSACTION_TYPE_OPTIONS.map(_option => (
-              <button
-                key={`transaction_form__type_${_option.value}`}
-                type="button"
-                onClick={() => setTransactionType(_option.value)}
-                className={`rounded-lg py-2 text-sm font-bold transition-colors ${type === _option.value ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'}`}
-              >
-                {_option.label}
-              </button>
-            ))}
-          </div>
+        <ErrorAlert message={error} />
 
-          <ErrorAlert message={error} />
+        <Input
+          label="Jumlah"
+          type="number"
+          inputMode="numeric"
+          min="1"
+          step="1"
+          required
+          placeholder="0"
+          value={form.amount}
+          onChange={event => setForm(_previous => ({ ..._previous, amount: event.target.value }))}
+          errors={fieldErrors.amount}
+        />
 
-          <Input
-            label="Jumlah"
-            type="number"
-            inputMode="numeric"
-            min="1"
-            step="1"
-            required
-            placeholder="0"
-            value={amount}
-            onChange={event => setAmount(event.target.value)}
-            errors={fieldErrors.amount}
-          />
+        <Select
+          label="Kategori"
+          value={form.categoryUuid ?? ''}
+          onChange={value => setForm(_previous => ({ ..._previous, categoryUuid: value }))}
+          errors={fieldErrors.categoryUuid}
+          placeholder="Tanpa kategori"
+          searchPlaceholder="Cari kategori..."
+          options={visibleCategories.map(_category => ({
+            value: _category.uuid,
+            label: _category.name,
+          }))}
+        />
 
-          <Select
-            label="Kategori"
-            value={categoryUuid}
-            onChange={setCategoryUuid}
-            errors={fieldErrors.categoryUuid}
-            placeholder="Tanpa kategori"
-            searchPlaceholder="Cari kategori..."
-            options={visibleCategories.map(_category => ({
-              value: _category.uuid,
-              label: _category.name,
-            }))}
-          />
+        <Select
+          label="Akun Rekening"
+          value={form.accountUuid ?? ''}
+          onChange={value => setForm(_previous => ({ ..._previous, accountUuid: value }))}
+          errors={fieldErrors.accountUuid}
+          placeholder="Pilih akun"
+          searchPlaceholder="Cari akun..."
+          options={accounts.map(_account => ({
+            value: _account.uuid,
+            label: _account.name,
+            description: _account.type === 'BANK' ? [_account.bankName, _account.accountNumber].filter(Boolean).join(' • ') : 'Cash',
+          }))}
+        />
 
-          <Select
-            label="Akun Rekening"
-            value={accountUuid}
-            onChange={setAccountUuid}
-            errors={fieldErrors.accountUuid}
-            placeholder="Pilih akun"
-            searchPlaceholder="Cari akun..."
-            options={accounts.map(_account => ({
-              value: _account.uuid,
-              label: _account.name,
-              description: _account.type === 'BANK' ? [_account.bankName, _account.accountNumber].filter(Boolean).join(' • ') : 'Cash',
-            }))}
-          />
+        <Input
+          label="Tanggal"
+          type="date"
+          required
+          value={form.occurredAt}
+          onChange={event => setForm(_previous => ({ ..._previous, occurredAt: event.target.value }))}
+          errors={fieldErrors.occurredAt}
+        />
 
-          <Input label="Tanggal" type="date" required value={occurredAt} onChange={event => setOccurredAt(event.target.value)} errors={fieldErrors.occurredAt} />
+        <Input
+          label="Catatan"
+          placeholder="Opsional"
+          maxLength={255}
+          value={form.note ?? ''}
+          onChange={event => setForm(_previous => ({ ..._previous, note: event.target.value }))}
+          errors={fieldErrors.note}
+        />
 
-          <Input label="Catatan" placeholder="Opsional" maxLength={255} value={note} onChange={event => setNote(event.target.value)} errors={fieldErrors.note} />
-
-          <Button type="submit" fullWidth disabled={pending}>
-            {pending ? 'Menyimpan...' : 'Simpan'}
-          </Button>
-        </form>
-      </Sheet>
-    </>
+        <Button type="submit" fullWidth disabled={pending}>
+          {pending ? 'Menyimpan...' : 'Simpan'}
+        </Button>
+      </form>
+    </Sheet>
   );
 }

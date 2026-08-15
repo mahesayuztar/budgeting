@@ -15,8 +15,8 @@ enum TransactionType {
 }
 
 enum DebtType {
-  RECEIVABLE // piutang - orang lain berhutang kepada kita
-  PAYABLE // hutang - kita berhutang kepada orang lain
+  RECEIVABLE
+  PAYABLE
 }
 
 enum DebtStatus {
@@ -82,28 +82,31 @@ model Category {
 }
 
 model Transaction {
-  id         Int             @id @default(autoincrement())
-  uuid       String          @unique @default(uuid())
-  userId     Int
-  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  categoryId Int?
-  category   Category?       @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  debtId     Int?
-  debt       Debt?           @relation(fields: [debtId], references: [id], onDelete: Cascade)
-  accountId  Int?
-  account    Account?        @relation(fields: [accountId], references: [id], onDelete: Restrict)
-  type       TransactionType
-  amount     Decimal         @db.Decimal(14, 2)
-  note       String?
-  occurredAt DateTime        @db.Date
-  createdAt  DateTime        @default(now())
-  updatedAt  DateTime        @updatedAt
+  id          Int             @id @default(autoincrement())
+  uuid        String          @unique @default(uuid())
+  userId      Int
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  categoryId  Int?
+  category    Category?       @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  debtId      Int?
+  debt        Debt?           @relation(fields: [debtId], references: [id], onDelete: Cascade)
+  accountId   Int?
+  account     Account?        @relation("TransactionAccount", fields: [accountId], references: [id], onDelete: Restrict)
+  toAccountId Int?
+  toAccount   Account?        @relation("TransactionToAccount", fields: [toAccountId], references: [id], onDelete: Restrict)
+  type        TransactionType
+  amount      Decimal         @db.Decimal(14, 2)
+  note        String?
+  occurredAt  DateTime        @db.Date
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
 
   @@index([userId, occurredAt])
   @@index([userId, type])
   @@index([categoryId])
   @@index([debtId])
   @@index([accountId])
+  @@index([toAccountId])
 }
 
 model Debt {
@@ -159,7 +162,8 @@ model Account {
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
 
-  transactions Transaction[]
+  transactions         Transaction[] @relation("TransactionAccount")
+  incomingTransactions Transaction[] @relation("TransactionToAccount")
 
   @@index([userId])
   @@index([userId, type])

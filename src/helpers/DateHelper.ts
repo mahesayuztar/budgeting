@@ -1,3 +1,5 @@
+export type PeriodScope = 'monthly' | 'weekly';
+
 export const MONTH_NAMES_ID = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'] as const;
 
 /**
@@ -28,6 +30,22 @@ export function yearRange(year: number) {
 }
 
 /**
+ * Menyusun rentang tujuh hari terakhir yang berakhir pada tanggal acuan dan
+ * ikut menghitung tanggal acuan itu sendiri. Rentangnya dibangun pada UTC agar
+ * sejajar dengan kolom `@db.Date` yang disimpan pada UTC midnight.
+ * @param {string | Date} reference - Tanggal acuan berupa objek Date atau teks `YYYY-MM-DD`.
+ * @returns {{ start: Date; end: Date }} Enam hari sebelum acuan sebagai batas inklusif dan sehari setelah acuan sebagai batas eksklusif.
+ */
+export function weekRange(reference: string | Date) {
+  const anchor = toDateOnly(reference);
+
+  return {
+    start: new Date(Date.UTC(anchor.getUTCFullYear(), anchor.getUTCMonth(), anchor.getUTCDate() - 6)),
+    end: new Date(Date.UTC(anchor.getUTCFullYear(), anchor.getUTCMonth(), anchor.getUTCDate() + 1)),
+  };
+}
+
+/**
  * Menyusun label periode bulan dalam bahasa Indonesia.
  * @param {number} year - Tahun periode, misalnya 2026.
  * @param {number} month - Bulan periode dengan Januari bernilai 1.
@@ -35,6 +53,27 @@ export function yearRange(year: number) {
  */
 export function monthLabel(year: number, month: number) {
   return `${MONTH_NAMES_ID[month - 1]} ${year}`;
+}
+
+/**
+ * Menyusun label rentang tanggal dalam bahasa Indonesia. Kedua batasnya
+ * inklusif, jadi pemanggil yang memegang batas akhir eksklusif perlu
+ * mengurangi satu hari lebih dulu.
+ * @param {string | Date} startDate - Tanggal awal rentang.
+ * @param {string | Date} endDate - Tanggal akhir rentang.
+ * @returns {string} Label rentang, misalnya `09 Agu 2026 - 15 Agu 2026`.
+ */
+export function dateRangeLabel(startDate: string | Date, endDate: string | Date) {
+  return `${formatDateID(startDate)} - ${formatDateID(endDate)}`;
+}
+
+/**
+ * Menyusun label rentang tujuh hari terakhir yang berakhir pada tanggal acuan.
+ * @param {string | Date} reference - Tanggal acuan akhir rentang.
+ * @returns {string} Label rentang, misalnya `09 Agu 2026 - 15 Agu 2026`.
+ */
+export function weekLabel(reference: string | Date) {
+  return dateRangeLabel(weekRange(reference).start, reference);
 }
 
 /**
@@ -122,4 +161,29 @@ export function resolvePeriod(rawPeriod: { year?: string; month?: string }) {
     year: Number.isInteger(year) && year >= 2000 && year <= 2100 ? year : fallback.year,
     month: Number.isInteger(month) && month >= 1 && month <= 12 ? month : fallback.month,
   };
+}
+
+/**
+ * Memformat nama hari dalam bentuk singkat berbahasa Indonesia.
+ * @param {Date | string} value - Tanggal berupa objek Date atau teks ISO.
+ * @returns {string} Nama hari singkat, misalnya `Sab`.
+ */
+export function formatWeekdayShortID(value: Date | string) {
+  const date = typeof value === 'string' ? new Date(value) : value;
+
+  return new Intl.DateTimeFormat('id-ID', {
+    weekday: 'short',
+    timeZone: 'UTC',
+  }).format(date);
+}
+
+/**
+ * Menerjemahkan cakupan periode dari query string menjadi nilai yang sah.
+ * Nilai yang tidak dikenali dianggap bulanan, sehingga halaman tidak pernah
+ * dirender dengan cakupan yang tidak ada penanganannya.
+ * @param {string} rawScope - Cakupan periode mentah dari query string, opsional.
+ * @returns {PeriodScope} Cakupan periode yang sudah dipastikan sah.
+ */
+export function resolveScope(rawScope?: string): PeriodScope {
+  return rawScope === 'weekly' ? 'weekly' : 'monthly';
 }

@@ -6,14 +6,9 @@ import { Button } from '@/src/components/ui/Button';
 import { ErrorAlert } from '@/src/components/ui/Alert';
 import DynamicIcon from '@/src/components/commons/DynamicIcon';
 import { useApiAction } from '@/src/hooks/useApiAction';
-import { reportApi, type ReportPeriod } from '@/src/lib/reports/ReportApi';
-import { MONTH_NAMES_ID } from '@/src/helpers/DateHelper';
+import { getReportParams, reportApi, type ReportPeriod } from '@/src/lib/reports/ReportApi';
+import { monthLabel, weekLabel } from '@/src/helpers/DateHelper';
 
-/**
- * pdf.js menyentuh DOM saat modulnya dimuat, sehingga penampil dokumen tidak
- * boleh ikut dirender di server. Pemisahan ini sekaligus menjaga agar pdfjs
- * yang berukuran sekitar satu megabyte tidak masuk ke bundle awal halaman.
- */
 const PdfViewer = dynamic(() => import('./PdfViewer'), {
   ssr: false,
   loading: () => (
@@ -25,6 +20,7 @@ const PdfViewer = dynamic(() => import('./PdfViewer'), {
 });
 
 const REPORT_PERIOD_OPTIONS: ReadonlyArray<{ value: ReportPeriod; label: string }> = [
+  { value: 'weekly', label: 'Mingguan' },
   { value: 'monthly', label: 'Bulanan' },
   { value: 'yearly', label: 'Tahunan' },
 ];
@@ -32,31 +28,40 @@ const REPORT_PERIOD_OPTIONS: ReadonlyArray<{ value: ReportPeriod; label: string 
 type ReportPanelOwnProps = {
   year: number;
   month: number;
+  referenceDate: string;
 };
 
 /**
  * Panel pratinjau dan unduh laporan PDF. Dokumen hasil pratinjau disimpan
  * bersama periode asalnya lalu dicocokkan saat render, karena menyinkronkannya
  * lewat useEffect akan menyisakan satu frame berisi dokumen periode lama dan
- * melanggar aturan `react-hooks/set-state-in-effect`.
+ * melanggar aturan `react-hooks/set-state-in-effect`. Periode mingguan tidak
+ * mengikuti tahun dan bulan yang dipilih, melainkan tujuh hari terakhir yang
+ * berakhir pada tanggal acuan dari server.
  * @param {ReportPanelOwnProps} props - Props komponen.
  * @param {number} props.year - Tahun periode laporan.
  * @param {number} props.month - Bulan periode laporan dengan Januari bernilai 1.
+ * @param {string} props.referenceDate - Tanggal hari ini dari server dalam format `YYYY-MM-DD`, dipakai sebagai akhir rentang mingguan.
  * @returns {ReactNode} Panel pratinjau dan unduh laporan.
  */
-export default function ReportPanel({ year, month }: ReportPanelOwnProps) {
+export default function ReportPanel({ year, month, referenceDate }: ReportPanelOwnProps) {
   const [period, setPeriod] = useState<ReportPeriod>('monthly');
   const [loadedPreview, setLoadedPreview] = useState<{ key: string; blob: Blob } | null>(null);
 
   const preview = useApiAction(reportApi.preview);
   const download = useApiAction(reportApi.downloadPdf);
 
-  const previewKey = `${period}-${year}-${month}`;
+  const reportParams = getReportParams(period, year, month, referenceDate);
+  const previewKey = `${period}-${year}-${month}-${referenceDate}`;
   const file = loadedPreview?.key === previewKey ? loadedPreview.blob : null;
-  const periodLabel = period === 'yearly' ? String(year) : `${MONTH_NAMES_ID[month - 1]} ${year}`;
+  const periodLabel = period === 'weekly' ? weekLabel(referenceDate) : period === 'yearly' ? String(year) : monthLabel(year, month);
 
+  /**
+   * Mengambil PDF periode terpilih lalu menyimpannya bersama kunci periodenya.
+   * @returns {Promise<void>} Selesai setelah pratinjau tersimpan atau permintaannya gagal.
+   */
   async function handlePreview() {
-    const blob = await preview.run(period, year, month);
+    const blob = await preview.run(reportParams);
     if (blob) setLoadedPreview({ key: previewKey, blob });
   }
 
@@ -64,7 +69,7 @@ export default function ReportPanel({ year, month }: ReportPanelOwnProps) {
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-center gap-3">
-          <div className="grid grid-cols-2 gap-2 rounded-xl bg-gray-100 p-1 lg:w-52">
+          <div className="grid grid-cols-3 gap-2 rounded-xl bg-gray-100 p-1 lg:w-80">
             {REPORT_PERIOD_OPTIONS.map(_option => (
               <button
                 key={`report_panel__period_${_option.value}`}
@@ -88,7 +93,7 @@ export default function ReportPanel({ year, month }: ReportPanelOwnProps) {
             {preview.pending ? 'Memuat...' : file ? 'Muat Ulang' : 'Pratinjau'}
           </Button>
 
-          <Button type="button" disabled={download.pending} onClick={() => download.run(period, year, month)}>
+          <Button type="button" disabled={download.pending} onClick={() => download.run(reportParams)}>
             <DynamicIcon icon="ph:download-simple" fontSize="18px" />
             {download.pending ? 'Menyiapkan...' : 'Download'}
           </Button>

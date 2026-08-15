@@ -1,52 +1,153 @@
 import Link from 'next/link';
 import { requireAuthUser } from '@/src/lib/auth/AuthDal';
-import { reportService } from '@/src/lib/reports/ReportService';
-import { formatDateID, monthLabel, resolvePeriod } from '@/src/helpers/DateHelper';
+import { reportService, type CategoryBreakdown } from '@/src/lib/reports/ReportService';
+import type { TransactionDTO } from '@/src/lib/transactions/TransactionService';
+import { formatDateID, formatWeekdayShortID, monthLabel, MONTH_NAMES_ID, resolvePeriod, resolveScope, toDateInputValue, weekLabel, weekRange } from '@/src/helpers/DateHelper';
 import { Card, SectionTitle } from '@/src/components/ui/Card';
 import { PageHeader } from '@/src/components/ui/PageHeader';
 import { Money } from '@/src/components/ui/Money';
 import { EmptyState } from '@/src/components/ui/EmptyState';
 import DynamicIcon from '@/src/components/commons/DynamicIcon';
 import PeriodSwitcher from './PeriodSwitcher';
-import YearChart from './YearChart';
+import ScopeSwitcher from './ScopeSwitcher';
+import TrendChart, { type TrendPoint } from './TrendChart';
+import AccountBalanceChart from './AccountBalanceChart';
+
+const RECENT_TRANSACTION_LIMIT = 6;
 
 type DashboardPageOwnProps = {
-  searchParams: Promise<{ year?: string; month?: string }>;
+  searchParams: Promise<{ year?: string; month?: string; scope?: string }>;
+};
+
+type DashboardPeriod = {
+  subtitle: string;
+  netLabel: string;
+  trendTitle: string;
+  recentTitle: string;
+  income: number;
+  expense: number;
+  net: number;
+  transactionCount: number;
+  expenseByCategory: CategoryBreakdown[];
+  points: TrendPoint[];
+  recent: TransactionDTO[];
 };
 
 /**
- * Halaman ringkasan keuangan: selisih bulan berjalan, tren dua belas bulan,
- * posisi hutang dan piutang, rincian pengeluaran per kategori, serta transaksi
- * terakhir. Seluruh ringkasannya diambil serentak supaya halaman tidak menunggu
- * kueri satu per satu.
+ * Menyiapkan seluruh isi dashboard untuk cakupan bulanan: ringkasan bulan
+ * terpilih, tren dua belas bulan sebagai grafiknya, dan transaksi terakhir.
+ * @param {number} userId - ID pengguna pemilik data.
+ * @param {number} year - Tahun periode yang dipilih.
+ * @param {number} month - Bulan periode yang dipilih dengan Januari bernilai 1.
+ * @returns {Promise<DashboardPeriod>} Isi dashboard untuk cakupan bulanan.
+ */
+async function getMonthlyPeriod(userId: number, year: number, month: number): Promise<DashboardPeriod> {
+  const [summary, yearly, recent] = await Promise.all([
+    reportService.getMonthlySummary(userId, year, month),
+    reportService.getYearlySummary(userId, year),
+    reportService.getRecentTransactions(userId, RECENT_TRANSACTION_LIMIT),
+  ]);
+
+  return {
+    subtitle: monthLabel(year, month),
+    netLabel: 'Selisih bulan ini',
+    trendTitle: `Tren ${year}`,
+    recentTitle: 'Transaksi Terakhir',
+    income: summary.income,
+    expense: summary.expense,
+    net: summary.net,
+    transactionCount: summary.transactionCount,
+    expenseByCategory: summary.expenseByCategory,
+    points: yearly.months.map(_point => ({
+      key: `month_${_point.month}`,
+      label: MONTH_NAMES_ID[_point.month - 1].slice(0, 3),
+      title: monthLabel(year, _point.month),
+      income: _point.income,
+      expense: _point.expense,
+      isActive: _point.month === month,
+    })),
+    recent,
+  };
+}
+
+/**
+ * Menyiapkan seluruh isi dashboard untuk cakupan tujuh hari terakhir: ringkasan
+ * rentangnya, tren per hari sebagai grafiknya, dan transaksi yang jatuh di
+ * dalam rentang tersebut.
+ * @param {number} userId - ID pengguna pemilik data.
+ * @param {string} referenceDate - Tanggal acuan akhir rentang dalam format `YYYY-MM-DD`.
+ * @returns {Promise<DashboardPeriod>} Isi dashboard untuk cakupan mingguan.
+ */
+async function getWeeklyPeriod(userId: number, referenceDate: string): Promise<DashboardPeriod> {
+  const { start, end } = weekRange(referenceDate);
+
+  const [summary, daily, recent] = await Promise.all([
+    reportService.getWeeklySummary(userId, referenceDate),
+    reportService.getDailySummary(userId, referenceDate),
+    reportService.getRecentTransactionsInRange(userId, start, end, RECENT_TRANSACTION_LIMIT),
+  ]);
+
+  return {
+    subtitle: `7 hari terakhir · ${weekLabel(referenceDate)}`,
+    netLabel: 'Selisih 7 hari',
+    trendTitle: 'Tren 7 Hari Terakhir',
+    recentTitle: 'Transaksi 7 Hari Terakhir',
+    income: summary.income,
+    expense: summary.expense,
+    net: summary.net,
+    transactionCount: summary.transactionCount,
+    expenseByCategory: summary.expenseByCategory,
+    points: daily.days.map(_point => ({
+      key: `day_${_point.date}`,
+      label: formatWeekdayShortID(_point.date),
+      title: formatDateID(_point.date),
+      income: _point.income,
+      expense: _point.expense,
+      isActive: _point.date === referenceDate,
+    })),
+    recent,
+  };
+}
+
+/**
+ * Halaman ringkasan keuangan: posisi saldo seluruh akun, selisih periode
+ * berjalan, tren periodenya, posisi hutang dan piutang, rincian pengeluaran per
+ * kategori, serta transaksi terakhir. Cakupan periodenya dapat ditukar antara
+ * bulanan dan tujuh hari terakhir, dan seluruh ringkasannya diambil serentak
+ * supaya halaman tidak menunggu kueri satu per satu.
  * @param {DashboardPageOwnProps} props - Props halaman.
- * @param {Promise<{ year?: string; month?: string }>} props.searchParams - Periode yang diminta lewat query string.
+ * @param {Promise<{ year?: string; month?: string; scope?: string }>} props.searchParams - Periode dan cakupan yang diminta lewat query string.
  * @returns {ReactNode} Halaman ringkasan keuangan.
  */
 export default async function DashboardPage({ searchParams }: DashboardPageOwnProps) {
   const user = await requireAuthUser();
-  const { year, month } = resolvePeriod(await searchParams);
+  const params = await searchParams;
+  const { year, month } = resolvePeriod(params);
+  const scope = resolveScope(params.scope);
+  const referenceDate = toDateInputValue(new Date());
 
-  const [summary, yearly, debts, recent] = await Promise.all([
-    reportService.getMonthlySummary(user.id, year, month),
-    reportService.getYearlySummary(user.id, year),
+  const [period, debts, balance] = await Promise.all([
+    scope === 'weekly' ? getWeeklyPeriod(user.id, referenceDate) : getMonthlyPeriod(user.id, year, month),
     reportService.getDebtSummary(user.id),
-    reportService.getRecentTransactions(user.id, 6),
+    reportService.getAccountBalanceSummary(user.id),
   ]);
+
+  const bankAccounts = balance.accounts.filter(_account => _account.type === 'BANK');
 
   return (
     <div className="flex flex-col gap-4">
-      <PageHeader title="Ringkasan" subtitle={monthLabel(year, month)}>
-        <PeriodSwitcher year={year} month={month} basePath="/dashboard" />
+      <PageHeader title="Ringkasan" subtitle={period.subtitle}>
+        <ScopeSwitcher scope={scope} basePath="/dashboard" />
+        {scope === 'monthly' && <PeriodSwitcher year={year} month={month} basePath="/dashboard" />}
       </PageHeader>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <Card className="col-span-2 border-theme-light-border bg-theme-light sm:col-span-1">
-          <p className="text-xs font-semibold text-gray-500">Selisih bulan ini</p>
+          <p className="text-xs font-semibold text-gray-500">{period.netLabel}</p>
           <p className="mt-1 text-2xl font-bold lg:text-3xl">
-            <Money value={summary.net} tone="auto" />
+            <Money value={period.net} tone="auto" />
           </p>
-          <p className="mt-1 text-[11px] text-gray-400">dari {summary.transactionCount} transaksi</p>
+          <p className="mt-1 text-[11px] text-gray-400">dari {period.transactionCount} transaksi</p>
         </Card>
 
         <Card>
@@ -55,7 +156,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageOwnPr
             <p className="text-xs font-semibold">Pemasukan</p>
           </div>
           <p className="mt-1.5 text-base font-bold sm:text-lg lg:text-xl">
-            <Money value={summary.income} tone="income" />
+            <Money value={period.income} tone="income" />
           </p>
         </Card>
 
@@ -65,15 +166,62 @@ export default async function DashboardPage({ searchParams }: DashboardPageOwnPr
             <p className="text-xs font-semibold">Pengeluaran</p>
           </div>
           <p className="mt-1.5 text-base font-bold sm:text-lg lg:text-xl">
-            <Money value={summary.expense} tone="expense" />
+            <Money value={period.expense} tone="expense" />
           </p>
+        </Card>
+      </div>
+
+      <div className="grid items-start gap-4 lg:grid-cols-3">
+        <Card>
+          <p className="text-xs font-semibold text-gray-500">Saldo total</p>
+          <p className="mt-1 text-2xl font-bold lg:text-3xl">
+            <Money value={balance.totalBalance} />
+          </p>
+          <p className="mt-1 text-[11px] text-gray-400">dari {balance.accounts.length} akun aktif</p>
+
+          <dl className="mt-3 flex flex-col gap-2 border-t border-gray-100 pt-3 text-xs">
+            <div className="flex items-center justify-between gap-2">
+              <dt className="flex items-center gap-1.5 text-gray-500">
+                <DynamicIcon icon="ph:money" fontSize="14px" />
+                Tunai
+              </dt>
+              <dd className="font-bold">
+                <Money value={balance.cashBalance} />
+              </dd>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <dt className="flex items-center gap-1.5 text-gray-500">
+                <DynamicIcon icon="ph:bank" fontSize="14px" />
+                Bank
+              </dt>
+              <dd className="font-bold">
+                <Money value={balance.bankBalance} />
+              </dd>
+            </div>
+          </dl>
+        </Card>
+
+        <Card className="lg:col-span-2">
+          <SectionTitle
+            title="Saldo per Akun Bank"
+            action={
+              <Link href="/profile" className="text-xs font-semibold text-gray-500 hover:underline">
+                Kelola akun
+              </Link>
+            }
+          />
+          {bankAccounts.length === 0 ? (
+            <EmptyState icon="ph:bank" title="Belum ada akun bank" description="Tambahkan akun bertipe bank dari halaman profil untuk melihat sebaran saldonya di sini." />
+          ) : (
+            <AccountBalanceChart accounts={bankAccounts} />
+          )}
         </Card>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <SectionTitle
-            title={`Tren ${year}`}
+            title={period.trendTitle}
             action={
               <div className="flex items-center gap-3 text-[10px] font-semibold text-gray-400">
                 <span className="flex items-center gap-1">
@@ -85,7 +233,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageOwnPr
               </div>
             }
           />
-          <YearChart months={yearly.months} activeMonth={month} />
+          <TrendChart points={period.points} />
         </Card>
 
         <Card>
@@ -117,11 +265,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageOwnPr
       <div className="grid items-start gap-4 sm:grid-cols-2">
         <Card>
           <SectionTitle title="Pengeluaran per Kategori" />
-          {summary.expenseByCategory.length === 0 ? (
+          {period.expenseByCategory.length === 0 ? (
             <EmptyState icon="ph:chart-pie-slice" title="Belum ada pengeluaran" description="Kategori akan muncul di sini setelah ada transaksi keluar." />
           ) : (
             <ul className="flex flex-col gap-3">
-              {summary.expenseByCategory.slice(0, 6).map(_item => (
+              {period.expenseByCategory.slice(0, 6).map(_item => (
                 <li key={`dashboard__expense_category_${_item.name}`} className="flex flex-col gap-1">
                   <div className="flex items-center justify-between gap-2 text-xs">
                     <span className="min-w-0 truncate font-semibold text-gray-700">{_item.name}</span>
@@ -146,7 +294,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageOwnPr
 
         <Card>
           <SectionTitle
-            title="Transaksi Terakhir"
+            title={period.recentTitle}
             action={
               <Link href="/transactions" className="text-xs font-semibold text-gray-500 hover:underline">
                 Lihat semua
@@ -154,11 +302,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageOwnPr
             }
           />
 
-          {recent.length === 0 ? (
+          {period.recent.length === 0 ? (
             <EmptyState icon="ph:receipt" title="Belum ada transaksi" description="Tambahkan pemasukan atau pengeluaran pertama Anda dari menu Transaksi." />
           ) : (
             <ul className="flex flex-col divide-y divide-gray-50">
-              {recent.map(_transaction => (
+              {period.recent.map(_transaction => (
                 <li key={`dashboard__recent_transaction_${_transaction.uuid}`} className="flex items-center gap-3 py-2.5">
                   <span
                     className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-gray-700"

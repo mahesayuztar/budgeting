@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { Prisma, type TransactionType } from '@prisma/client';
+import { Prisma, type AccountType, type TransactionType } from '@prisma/client';
 import { prisma } from '@/src/lib/Prisma';
 import { NotFoundError } from '@/src/lib/Errors';
 import { toAmount } from '@/src/helpers/MoneyHelper';
@@ -15,6 +15,7 @@ export type TransactionDTO = {
   note: string | null;
   occurredAt: string;
   category: { uuid: string; name: string; icon: string | null; color: string | null } | null;
+  account: { uuid: string; name: string; type: AccountType } | null;
 };
 
 const transactionSelect = {
@@ -24,6 +25,7 @@ const transactionSelect = {
   note: true,
   occurredAt: true,
   category: { select: { uuid: true, name: true, icon: true, color: true } },
+  account: { select: { uuid: true, name: true, type: true } },
 } satisfies Prisma.TransactionSelect;
 
 type TransactionRow = Prisma.TransactionGetPayload<{ select: typeof transactionSelect }>;
@@ -43,6 +45,7 @@ function toDTO(row: TransactionRow): TransactionDTO {
     note: row.note,
     occurredAt: row.occurredAt.toISOString().slice(0, 10),
     category: row.category,
+    account: row.account,
   };
 }
 
@@ -140,6 +143,39 @@ async function resolveAccountId(userId: number, accountUuid?: string | null) {
   return account.id;
 }
 
+/**
+ * Menghitung pengaruh sebuah transaksi terhadap saldo akun. INCOME menambah
+ * saldo dan EXPENSE menguranginya, sedangkan TRANSFER sengaja belum
+ * berpengaruh karena alur akun asal dan tujuannya masih dikerjakan terpisah.
+ * @param {TransactionType} type - Jenis transaksi, INCOME, EXPENSE, atau TRANSFER.
+ * @param {Prisma.Decimal} amount - Nilai transaksi.
+ * @returns {Prisma.Decimal} Selisih yang harus ditambahkan ke saldo akun, bernilai nol untuk TRANSFER.
+ */
+function getBalanceDelta(type: TransactionType, amount: Prisma.Decimal): Prisma.Decimal {
+  if (type === 'INCOME') return amount;
+  if (type === 'EXPENSE') return amount.negated();
+
+  return new Prisma.Decimal(0);
+}
+
+/**
+ * Menerapkan selisih saldo ke sebuah akun. Perubahan ditulis sebagai
+ * `increment` supaya penambahan dihitung database, bukan dari nilai saldo yang
+ * sudah terlanjur dibaca lebih dulu dan bisa basi saat ada perubahan bersamaan.
+ * @param {Prisma.TransactionClient} client - Client Prisma milik transaksi database yang sedang berjalan.
+ * @param {number | null} accountId - ID internal akun, boleh kosong untuk transaksi tanpa akun.
+ * @param {Prisma.Decimal} delta - Selisih saldo yang diterapkan.
+ * @returns {Promise<void>} Selesai setelah saldo akun diperbarui, atau langsung selesai bila tidak ada yang perlu diubah.
+ */
+async function applyBalanceDelta(client: Prisma.TransactionClient, accountId: number | null, delta: Prisma.Decimal): Promise<void> {
+  if (!accountId || delta.isZero()) return;
+
+  await client.account.update({
+    where: { id: accountId },
+    data: { balance: { increment: delta } },
+  });
+}
+
 class TransactionService {
   /**
    * Mengambil satu halaman transaksi milik pengguna sesuai filter periode,
@@ -176,10 +212,39 @@ class TransactionService {
    * @returns {Promise<TransactionDTO[]>} Seluruh transaksi pada periode tersebut.
    */
   async listAllInPeriod(userId: number, year: number, month?: number): Promise<TransactionDTO[]> {
+    const { start, end } = month ? monthRange(year, month) : yearRange(year);
+    return this.listAllInRange(userId, start, end);
+  }
+
+  /**
+   * Mengambil seluruh transaksi dalam satu rentang tanggal bebas tanpa
+   * paginasi, dipakai laporan yang periodenya tidak jatuh tepat pada batas
+   * bulan atau tahun.
+   * @param {number} userId - ID pengguna pemilik transaksi.
+   * @param {Date} start - Awal rentang sebagai batas inklusif.
+   * @param {Date} end - Akhir rentang sebagai batas eksklusif.
+   * @returns {Promise<TransactionDTO[]>} Seluruh transaksi pada rentang tersebut.
+   */
+  async listAllInRange(userId: number, start: Date, end: Date): Promise<TransactionDTO[]> {
+    return this.listInRange(userId, start, end);
+  }
+
+  /**
+   * Mengambil transaksi terbaru dalam satu rentang tanggal, terurut dari yang
+   * paling baru. Jumlahnya boleh dibatasi supaya kartu ringkas tidak perlu
+   * mengambil seluruh isi rentangnya.
+   * @param {number} userId - ID pengguna pemilik transaksi.
+   * @param {Date} start - Awal rentang sebagai batas inklusif.
+   * @param {Date} end - Akhir rentang sebagai batas eksklusif.
+   * @param {number} limit - Jumlah transaksi terbanyak yang diambil, tanpa batas bila kosong.
+   * @returns {Promise<TransactionDTO[]>} Transaksi pada rentang tersebut, terbaru lebih dulu.
+   */
+  async listInRange(userId: number, start: Date, end: Date, limit?: number): Promise<TransactionDTO[]> {
     const rows = await prisma.transaction.findMany({
-      where: { userId, ...buildPeriodFilter({ year, month }) },
+      where: { userId, occurredAt: { gte: start, lt: end } },
       select: transactionSelect,
       orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
+      ...(limit ? { take: limit } : {}),
     });
 
     return rows.map(toDTO);
@@ -187,7 +252,9 @@ class TransactionService {
 
   /**
    * Mencatat transaksi baru milik pengguna. UUID kategori dan akun diterjemahkan
-   * lebih dulu supaya keduanya dipastikan milik pengguna yang sama.
+   * lebih dulu supaya keduanya dipastikan milik pengguna yang sama. Pencatatan
+   * transaksi dan pemutakhiran saldo akun dijalankan atomik supaya saldo tidak
+   * pernah bergerak tanpa transaksi yang mendasarinya, dan sebaliknya.
    * @param {number} userId - ID pengguna pemilik transaksi.
    * @param {TransactionInput} input - Data transaksi yang sudah tervalidasi.
    * @param {TransactionType} input.type - Jenis transaksi, INCOME, EXPENSE, atau TRANSFER.
@@ -198,25 +265,37 @@ class TransactionService {
    */
   async create(userId: number, input: TransactionInput): Promise<TransactionDTO> {
     const categoryId = await resolveCategoryId(userId, input.categoryUuid);
-    await resolveAccountId(userId, input.accountUuid);
+    const accountId = await resolveAccountId(userId, input.accountUuid);
+    const amount = new Prisma.Decimal(input.amount);
 
-    const row = await prisma.transaction.create({
-      data: {
-        userId,
-        categoryId,
-        type: input.type,
-        amount: new Prisma.Decimal(input.amount),
-        note: input.note?.trim() || null,
-        occurredAt: toDateOnly(input.occurredAt),
-      },
-      select: transactionSelect,
+    const row = await prisma.$transaction(async client => {
+      const created = await client.transaction.create({
+        data: {
+          userId,
+          categoryId,
+          accountId,
+          type: input.type,
+          amount,
+          note: input.note?.trim() || null,
+          occurredAt: toDateOnly(input.occurredAt),
+        },
+        select: transactionSelect,
+      });
+
+      await applyBalanceDelta(client, accountId, getBalanceDelta(input.type, amount));
+
+      return created;
     });
 
     return toDTO(row);
   }
 
   /**
-   * Memperbarui transaksi milik pengguna.
+   * Memperbarui transaksi milik pengguna. Saldo disesuaikan dengan membatalkan
+   * pengaruh nilai lama lebih dulu lalu menerapkan pengaruh nilai baru,
+   * sehingga perubahan jenis, nilai, maupun perpindahan akun tetap menghasilkan
+   * saldo yang benar. Selama akunnya tidak berpindah, kedua langkah itu
+   * digabung menjadi satu selisih supaya cukup sekali menulis ke akun.
    * @param {number} userId - ID pengguna pemilik transaksi.
    * @param {string} uuid - UUID transaksi yang diperbarui.
    * @param {TransactionInput} input - Data transaksi yang sudah tervalidasi.
@@ -224,52 +303,77 @@ class TransactionService {
    * @param {number} input.amount - Nilai transaksi.
    * @param {string} input.occurredAt - Tanggal transaksi dalam format `YYYY-MM-DD`.
    * @returns {Promise<TransactionDTO>} Transaksi setelah diperbarui.
-   * @throws {NotFoundError} Jika transaksi atau kategorinya tidak ada, atau bukan milik pengguna tersebut.
+   * @throws {NotFoundError} Jika transaksi, kategori, atau akunnya tidak ada, atau bukan milik pengguna tersebut.
    */
   async update(userId: number, uuid: string, input: TransactionInput): Promise<TransactionDTO> {
-    await this.mustOwn(userId, uuid);
+    const previous = await this.mustOwn(userId, uuid);
     const categoryId = await resolveCategoryId(userId, input.categoryUuid);
+    const accountId = await resolveAccountId(userId, input.accountUuid);
+    const amount = new Prisma.Decimal(input.amount);
 
-    const row = await prisma.transaction.update({
-      where: { uuid },
-      data: {
-        categoryId,
-        type: input.type,
-        amount: new Prisma.Decimal(input.amount),
-        note: input.note?.trim() || null,
-        occurredAt: toDateOnly(input.occurredAt),
-      },
-      select: transactionSelect,
+    const previousDelta = getBalanceDelta(previous.type, previous.amount);
+    const nextDelta = getBalanceDelta(input.type, amount);
+
+    const row = await prisma.$transaction(async client => {
+      const updated = await client.transaction.update({
+        where: { id: previous.id },
+        data: {
+          categoryId,
+          accountId,
+          type: input.type,
+          amount,
+          note: input.note?.trim() || null,
+          occurredAt: toDateOnly(input.occurredAt),
+        },
+        select: transactionSelect,
+      });
+
+      if (previous.accountId === accountId) {
+        await applyBalanceDelta(client, accountId, nextDelta.minus(previousDelta));
+      } else {
+        await applyBalanceDelta(client, previous.accountId, previousDelta.negated());
+        await applyBalanceDelta(client, accountId, nextDelta);
+      }
+
+      return updated;
     });
 
     return toDTO(row);
   }
 
   /**
-   * Menghapus transaksi milik pengguna.
+   * Menghapus transaksi milik pengguna sekaligus membatalkan pengaruhnya
+   * terhadap saldo akun, supaya saldo kembali seperti sebelum transaksi itu
+   * pernah dicatat.
    * @param {number} userId - ID pengguna pemilik transaksi.
    * @param {string} uuid - UUID transaksi yang dihapus.
-   * @returns {Promise<void>} Selesai setelah transaksi terhapus.
+   * @returns {Promise<void>} Selesai setelah transaksi terhapus dan saldo akunnya disesuaikan.
    * @throws {NotFoundError} Jika transaksi tidak ada atau bukan milik pengguna tersebut.
    */
   async remove(userId: number, uuid: string): Promise<void> {
-    await this.mustOwn(userId, uuid);
-    await prisma.transaction.delete({ where: { uuid } });
+    const previous = await this.mustOwn(userId, uuid);
+    const previousDelta = getBalanceDelta(previous.type, previous.amount);
+
+    await prisma.$transaction(async client => {
+      await client.transaction.delete({ where: { id: previous.id } });
+      await applyBalanceDelta(client, previous.accountId, previousDelta.negated());
+    });
   }
 
   /**
-   * Memastikan sebuah transaksi benar-benar milik pengguna sebelum diubah.
-   * `userId` selalu ikut di filter supaya uuid milik orang lain tidak dapat
-   * disentuh hanya dengan menebak nilainya.
+   * Memastikan sebuah transaksi benar-benar milik pengguna sebelum diubah,
+   * sekaligus mengambil nilai lamanya yang dibutuhkan untuk menghitung ulang
+   * saldo akun. `userId` selalu ikut di filter supaya uuid milik orang lain
+   * tidak dapat disentuh hanya dengan menebak nilainya.
    * @param {number} userId - ID pengguna pemilik transaksi.
    * @param {string} uuid - UUID transaksi yang diperiksa.
-   * @returns {Promise<{ id: number }>} ID internal transaksi.
+   * @returns {Promise<{ id: number; accountId: number | null; type: TransactionType; amount: Prisma.Decimal }>} ID internal transaksi beserta akun, jenis, dan nilai lamanya.
    * @throws {NotFoundError} Jika transaksi tidak ada atau bukan milik pengguna tersebut.
    */
   private async mustOwn(userId: number, uuid: string) {
     const transaction = await prisma.transaction.findFirst({
       where: { uuid, userId },
-      select: { id: true },
+      select: { id: true, accountId: true, type: true, amount: true },
     });
 
     if (!transaction) throw new NotFoundError('Transaksi tidak ditemukan.');

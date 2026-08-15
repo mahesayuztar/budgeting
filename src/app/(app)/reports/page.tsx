@@ -1,6 +1,6 @@
 import { requireAuthUser } from '@/src/lib/auth/AuthDal';
 import { reportService } from '@/src/lib/reports/ReportService';
-import { monthLabel, MONTH_NAMES_ID, resolvePeriod } from '@/src/helpers/DateHelper';
+import { monthLabel, MONTH_NAMES_ID, resolvePeriod, toDateInputValue } from '@/src/helpers/DateHelper';
 import { Card, SectionTitle } from '@/src/components/ui/Card';
 import { PageHeader } from '@/src/components/ui/PageHeader';
 import { Money } from '@/src/components/ui/Money';
@@ -34,7 +34,7 @@ export default async function ReportsPage({ searchParams }: ReportsPageOwnProps)
       <div className="grid flex-1 gap-4 xl:grid-cols-3">
         <Card className="min-w-0 xl:col-span-2">
           <SectionTitle title="Pratinjau & Unduh Laporan" />
-          <ReportPanel year={year} month={month} />
+          <ReportPanel year={year} month={month} referenceDate={toDateInputValue(new Date())} />
         </Card>
 
         <Card className="min-w-0">
