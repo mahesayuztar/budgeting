@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState, type FormEvent } from 'react';
 import { Button } from '@/src/components/ui/Button';
-import { Input, Select } from '@/src/components/ui/Field';
+import { Input, Select, type SelectOption } from '@/src/components/ui/Field';
 import { ErrorAlert } from '@/src/components/ui/Alert';
 import { Sheet } from '@/src/components/ui/Sheet';
 import { useApiMutation } from '@/src/hooks/useApiMutation';
@@ -13,6 +13,20 @@ import type { AccountDTO } from '@/src/lib/accounts/AccountService';
 import type { TransactionInput } from '@/src/lib/transactions/TransactionValidator';
 
 type TransactionType = TransactionFormState['type'];
+
+/**
+ * Menyusun opsi select dari daftar akun. Akun bank diberi keterangan nama bank
+ * dan nomor rekening supaya dua akun dengan nama mirip tetap dapat dibedakan.
+ * @param {AccountDTO[]} accounts - Akun yang akan dijadikan opsi.
+ * @returns {SelectOption[]} Opsi select siap pakai.
+ */
+function toAccountOptions(accounts: AccountDTO[]): SelectOption[] {
+  return accounts.map(_account => ({
+    value: _account.uuid,
+    label: _account.name,
+    description: _account.type === 'BANK' ? [_account.bankName, _account.accountNumber].filter(Boolean).join(' • ') : 'Cash',
+  }));
+}
 
 const TRANSACTION_TYPE_OPTIONS: ReadonlyArray<{ value: TransactionType; label: string }> = [
   { value: 'EXPENSE', label: 'Pengeluaran' },
@@ -53,10 +67,26 @@ export default function TransactionForm({ categories, accounts, editingUuid, ini
 
   const { run, pending, error, fieldErrors } = useApiMutation(save, { invalidateKeys: [['transactions']] });
 
+  const isTransfer = form.type === 'TRANSFER';
   const visibleCategories = useMemo(() => categories.filter(_category => _category.type === form.type), [categories, form.type]);
+  const sourceOptions = useMemo(() => toAccountOptions(accounts), [accounts]);
+  const destinationOptions = useMemo(() => toAccountOptions(accounts.filter(_account => _account.uuid !== form.accountUuid)), [accounts, form.accountUuid]);
+
+  function setSourceAccount(accountUuid: string) {
+    setForm(_previous => ({
+      ..._previous,
+      accountUuid,
+      toAccountUuid: _previous.toAccountUuid === accountUuid ? null : _previous.toAccountUuid,
+    }));
+  }
 
   function setTransactionType(type: TransactionType) {
-    setForm(_previous => ({ ..._previous, type, categoryUuid: null }));
+    setForm(_previous => ({
+      ..._previous,
+      type,
+      categoryUuid: null,
+      toAccountUuid: type === 'TRANSFER' ? _previous.toAccountUuid : null,
+    }));
   }
 
   async function handleSubmit(event: FormEvent) {
@@ -113,18 +143,27 @@ export default function TransactionForm({ categories, accounts, editingUuid, ini
         />
 
         <Select
-          label="Akun Rekening"
-          value={form.accountUuid ?? ''}
-          onChange={value => setForm(_previous => ({ ..._previous, accountUuid: value }))}
+          label={isTransfer ? 'Akun Sumber' : 'Akun Rekening'}
+          value={form.accountUuid}
+          onChange={setSourceAccount}
           errors={fieldErrors.accountUuid}
           placeholder="Pilih akun"
           searchPlaceholder="Cari akun..."
-          options={accounts.map(_account => ({
-            value: _account.uuid,
-            label: _account.name,
-            description: _account.type === 'BANK' ? [_account.bankName, _account.accountNumber].filter(Boolean).join(' • ') : 'Cash',
-          }))}
+          options={sourceOptions}
         />
+
+        {isTransfer && (
+          <Select
+            label="Akun Tujuan"
+            value={form.toAccountUuid ?? ''}
+            onChange={value => setForm(_previous => ({ ..._previous, toAccountUuid: value }))}
+            errors={fieldErrors.toAccountUuid}
+            placeholder="Pilih akun tujuan"
+            searchPlaceholder="Cari akun..."
+            hint="Saldo berpindah dari akun sumber ke akun tujuan."
+            options={destinationOptions}
+          />
+        )}
 
         <Input
           label="Tanggal"

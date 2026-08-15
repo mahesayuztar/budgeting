@@ -24,7 +24,8 @@ export function createEmptyTransactionForm(defaultAccountUuid?: string): Transac
     type: 'EXPENSE',
     amount: '',
     categoryUuid: null,
-    accountUuid: defaultAccountUuid ?? null,
+    accountUuid: defaultAccountUuid ?? '',
+    toAccountUuid: null,
     note: null,
     occurredAt: toDateInputValue(new Date()),
   };
@@ -43,16 +44,19 @@ export function toTransactionFormState(transaction: TransactionDTO): Transaction
     type: transaction.type,
     amount: String(transaction.amount),
     categoryUuid: transaction.category?.uuid ?? null,
-    accountUuid: transaction.account?.uuid ?? null,
+    accountUuid: transaction.account?.uuid ?? '',
+    toAccountUuid: transaction.toAccount?.uuid ?? null,
     note: transaction.note,
     occurredAt: transaction.occurredAt,
   };
 }
 
 /**
- * Menerjemahkan state form menjadi payload yang diterima api transaksi. Nilai
- * uuid kosong diubah menjadi null supaya tidak ditolak validator sebagai uuid
- * yang tidak sah, dan `amount` dikembalikan ke number.
+ * Menerjemahkan state form menjadi payload yang diterima api transaksi. Uuid
+ * opsional yang kosong diubah menjadi null supaya tidak ditolak validator
+ * sebagai uuid yang tidak sah, akun tujuan hanya ikut terkirim untuk TRANSFER
+ * supaya jenis lain tidak meninggalkan tautan akun yang menyesatkan, dan
+ * `amount` dikembalikan ke number.
  * @param {TransactionFormState} form - State form yang sedang diisi pengguna.
  * @returns {TransactionInput} Payload siap kirim ke api transaksi.
  */
@@ -61,7 +65,8 @@ export function toTransactionInput(form: TransactionFormState): TransactionInput
     type: form.type,
     amount: Number(form.amount),
     categoryUuid: form.categoryUuid || null,
-    accountUuid: form.accountUuid || null,
+    accountUuid: form.accountUuid,
+    toAccountUuid: form.type === 'TRANSFER' ? form.toAccountUuid || null : null,
     note: form.note || null,
     occurredAt: form.occurredAt,
   };

@@ -234,6 +234,18 @@ export default function TransactionsTable({ year, month, initialPage, categories
               </div>
 
               <div className="flex items-start justify-between gap-4 border-t border-gray-100 pt-2">
+                <dt className="shrink-0 text-gray-500">{detail.type === 'TRANSFER' ? 'Akun Sumber' : 'Akun'}</dt>
+                <dd className="min-w-0 break-words text-right font-semibold text-gray-800">{detail.account?.name ?? '-'}</dd>
+              </div>
+
+              {detail.type === 'TRANSFER' && (
+                <div className="flex items-start justify-between gap-4 border-t border-gray-100 pt-2">
+                  <dt className="shrink-0 text-gray-500">Akun Tujuan</dt>
+                  <dd className="min-w-0 break-words text-right font-semibold text-gray-800">{detail.toAccount?.name ?? '-'}</dd>
+                </div>
+              )}
+
+              <div className="flex items-start justify-between gap-4 border-t border-gray-100 pt-2">
                 <dt className="shrink-0 text-gray-500">Tanggal</dt>
                 <dd className="text-right font-semibold text-gray-800">{formatDateID(detail.occurredAt)}</dd>
               </div>

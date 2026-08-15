@@ -12,7 +12,8 @@
     "start": "next start",
     "lint": "eslint",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "balances:recompute": "tsx scripts/recompute-balances.ts"
   },
   "dependencies": {
     "@iconify/react": "^6.0.2",

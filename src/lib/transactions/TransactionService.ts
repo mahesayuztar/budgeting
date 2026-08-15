@@ -16,6 +16,7 @@ export type TransactionDTO = {
   occurredAt: string;
   category: { uuid: string; name: string; icon: string | null; color: string | null } | null;
   account: { uuid: string; name: string; type: AccountType } | null;
+  toAccount: { uuid: string; name: string; type: AccountType } | null;
 };
 
 const transactionSelect = {
@@ -26,6 +27,7 @@ const transactionSelect = {
   occurredAt: true,
   category: { select: { uuid: true, name: true, icon: true, color: true } },
   account: { select: { uuid: true, name: true, type: true } },
+  toAccount: { select: { uuid: true, name: true, type: true } },
 } satisfies Prisma.TransactionSelect;
 
 type TransactionRow = Prisma.TransactionGetPayload<{ select: typeof transactionSelect }>;
@@ -46,6 +48,7 @@ function toDTO(row: TransactionRow): TransactionDTO {
     occurredAt: row.occurredAt.toISOString().slice(0, 10),
     category: row.category,
     account: row.account,
+    toAccount: row.toAccount,
   };
 }
 
@@ -143,37 +146,73 @@ async function resolveAccountId(userId: number, accountUuid?: string | null) {
   return account.id;
 }
 
+type BalanceMovement = {
+  accountId: number | null;
+  delta: Prisma.Decimal;
+};
+
 /**
- * Menghitung pengaruh sebuah transaksi terhadap saldo akun. INCOME menambah
- * saldo dan EXPENSE menguranginya, sedangkan TRANSFER sengaja belum
- * berpengaruh karena alur akun asal dan tujuannya masih dikerjakan terpisah.
+ * Menyusun perpindahan saldo yang ditimbulkan sebuah transaksi. INCOME menambah
+ * saldo akunnya, EXPENSE menguranginya, dan TRANSFER memindahkan nilai yang
+ * sama dari akun sumber ke akun tujuan sehingga jumlah saldo kedua akun tidak
+ * berubah.
  * @param {TransactionType} type - Jenis transaksi, INCOME, EXPENSE, atau TRANSFER.
  * @param {Prisma.Decimal} amount - Nilai transaksi.
- * @returns {Prisma.Decimal} Selisih yang harus ditambahkan ke saldo akun, bernilai nol untuk TRANSFER.
+ * @param {number | null} accountId - ID akun sumber, juga dipakai INCOME dan EXPENSE.
+ * @param {number | null} toAccountId - ID akun tujuan, hanya terisi untuk TRANSFER.
+ * @returns {BalanceMovement[]} Daftar perpindahan saldo yang harus diterapkan.
  */
-function getBalanceDelta(type: TransactionType, amount: Prisma.Decimal): Prisma.Decimal {
-  if (type === 'INCOME') return amount;
-  if (type === 'EXPENSE') return amount.negated();
+function getBalanceMovements(type: TransactionType, amount: Prisma.Decimal, accountId: number | null, toAccountId: number | null): BalanceMovement[] {
+  if (type === 'INCOME') return [{ accountId, delta: amount }];
+  if (type === 'EXPENSE') return [{ accountId, delta: amount.negated() }];
 
-  return new Prisma.Decimal(0);
+  return [
+    { accountId, delta: amount.negated() },
+    { accountId: toAccountId, delta: amount },
+  ];
 }
 
 /**
- * Menerapkan selisih saldo ke sebuah akun. Perubahan ditulis sebagai
- * `increment` supaya penambahan dihitung database, bukan dari nilai saldo yang
- * sudah terlanjur dibaca lebih dulu dan bisa basi saat ada perubahan bersamaan.
- * @param {Prisma.TransactionClient} client - Client Prisma milik transaksi database yang sedang berjalan.
- * @param {number | null} accountId - ID internal akun, boleh kosong untuk transaksi tanpa akun.
- * @param {Prisma.Decimal} delta - Selisih saldo yang diterapkan.
- * @returns {Promise<void>} Selesai setelah saldo akun diperbarui, atau langsung selesai bila tidak ada yang perlu diubah.
+ * Membalik arah sekumpulan perpindahan saldo, dipakai untuk membatalkan
+ * pengaruh nilai lama sebuah transaksi saat diubah atau dihapus.
+ * @param {BalanceMovement[]} movements - Perpindahan saldo yang akan dibalik.
+ * @returns {BalanceMovement[]} Perpindahan saldo dengan arah berlawanan.
  */
-async function applyBalanceDelta(client: Prisma.TransactionClient, accountId: number | null, delta: Prisma.Decimal): Promise<void> {
-  if (!accountId || delta.isZero()) return;
+function negateBalanceMovements(movements: BalanceMovement[]): BalanceMovement[] {
+  return movements.map(_movement => ({ accountId: _movement.accountId, delta: _movement.delta.negated() }));
+}
 
-  await client.account.update({
-    where: { id: accountId },
-    data: { balance: { increment: delta } },
-  });
+/**
+ * Menerapkan sekumpulan perpindahan saldo ke akun terkait. Perpindahan pada
+ * akun yang sama digabung lebih dulu supaya tiap akun cukup ditulis sekali, dan
+ * penulisannya diurutkan menurut id akun supaya dua transfer bersamaan yang
+ * menyentuh pasangan akun sama tidak saling mengunci. Perubahan ditulis sebagai
+ * `increment` supaya penambahan dihitung database, bukan dari nilai saldo yang
+ * sudah terlanjur dibaca lebih dulu dan bisa basi.
+ * @param {Prisma.TransactionClient} client - Client Prisma milik transaksi database yang sedang berjalan.
+ * @param {BalanceMovement[]} movements - Perpindahan saldo yang akan diterapkan.
+ * @returns {Promise<void>} Selesai setelah seluruh saldo akun terkait diperbarui.
+ */
+async function applyBalanceMovements(client: Prisma.TransactionClient, movements: BalanceMovement[]): Promise<void> {
+  const totals = new Map<number, Prisma.Decimal>();
+
+  for (const _movement of movements) {
+    if (!_movement.accountId) continue;
+    const current = totals.get(_movement.accountId) ?? new Prisma.Decimal(0);
+    totals.set(_movement.accountId, current.plus(_movement.delta));
+  }
+
+  const accountIds = [...totals.keys()].sort((_left, _right) => _left - _right);
+
+  for (const _accountId of accountIds) {
+    const delta = totals.get(_accountId);
+    if (!delta || delta.isZero()) continue;
+
+    await client.account.update({
+      where: { id: _accountId },
+      data: { balance: { increment: delta } },
+    });
+  }
 }
 
 class TransactionService {
@@ -266,6 +305,7 @@ class TransactionService {
   async create(userId: number, input: TransactionInput): Promise<TransactionDTO> {
     const categoryId = await resolveCategoryId(userId, input.categoryUuid);
     const accountId = await resolveAccountId(userId, input.accountUuid);
+    const toAccountId = input.type === 'TRANSFER' ? await resolveAccountId(userId, input.toAccountUuid) : null;
     const amount = new Prisma.Decimal(input.amount);
 
     const row = await prisma.$transaction(async client => {
@@ -274,6 +314,7 @@ class TransactionService {
           userId,
           categoryId,
           accountId,
+          toAccountId,
           type: input.type,
           amount,
           note: input.note?.trim() || null,
@@ -282,7 +323,7 @@ class TransactionService {
         select: transactionSelect,
       });
 
-      await applyBalanceDelta(client, accountId, getBalanceDelta(input.type, amount));
+      await applyBalanceMovements(client, getBalanceMovements(input.type, amount, accountId, toAccountId));
 
       return created;
     });
@@ -292,10 +333,10 @@ class TransactionService {
 
   /**
    * Memperbarui transaksi milik pengguna. Saldo disesuaikan dengan membatalkan
-   * pengaruh nilai lama lebih dulu lalu menerapkan pengaruh nilai baru,
-   * sehingga perubahan jenis, nilai, maupun perpindahan akun tetap menghasilkan
-   * saldo yang benar. Selama akunnya tidak berpindah, kedua langkah itu
-   * digabung menjadi satu selisih supaya cukup sekali menulis ke akun.
+   * seluruh perpindahan nilai lama lebih dulu lalu menerapkan perpindahan nilai
+   * baru, sehingga perubahan jenis, nilai, akun sumber, maupun akun tujuan
+   * tetap menghasilkan saldo yang benar. Kedua rangkaian itu digabung dan
+   * dijumlahkan per akun, jadi akun yang tidak berpindah cukup ditulis sekali.
    * @param {number} userId - ID pengguna pemilik transaksi.
    * @param {string} uuid - UUID transaksi yang diperbarui.
    * @param {TransactionInput} input - Data transaksi yang sudah tervalidasi.
@@ -309,10 +350,11 @@ class TransactionService {
     const previous = await this.mustOwn(userId, uuid);
     const categoryId = await resolveCategoryId(userId, input.categoryUuid);
     const accountId = await resolveAccountId(userId, input.accountUuid);
+    const toAccountId = input.type === 'TRANSFER' ? await resolveAccountId(userId, input.toAccountUuid) : null;
     const amount = new Prisma.Decimal(input.amount);
 
-    const previousDelta = getBalanceDelta(previous.type, previous.amount);
-    const nextDelta = getBalanceDelta(input.type, amount);
+    const previousMovements = getBalanceMovements(previous.type, previous.amount, previous.accountId, previous.toAccountId);
+    const nextMovements = getBalanceMovements(input.type, amount, accountId, toAccountId);
 
     const row = await prisma.$transaction(async client => {
       const updated = await client.transaction.update({
@@ -320,6 +362,7 @@ class TransactionService {
         data: {
           categoryId,
           accountId,
+          toAccountId,
           type: input.type,
           amount,
           note: input.note?.trim() || null,
@@ -328,12 +371,7 @@ class TransactionService {
         select: transactionSelect,
       });
 
-      if (previous.accountId === accountId) {
-        await applyBalanceDelta(client, accountId, nextDelta.minus(previousDelta));
-      } else {
-        await applyBalanceDelta(client, previous.accountId, previousDelta.negated());
-        await applyBalanceDelta(client, accountId, nextDelta);
-      }
+      await applyBalanceMovements(client, [...negateBalanceMovements(previousMovements), ...nextMovements]);
 
       return updated;
     });
@@ -352,11 +390,11 @@ class TransactionService {
    */
   async remove(userId: number, uuid: string): Promise<void> {
     const previous = await this.mustOwn(userId, uuid);
-    const previousDelta = getBalanceDelta(previous.type, previous.amount);
+    const previousMovements = getBalanceMovements(previous.type, previous.amount, previous.accountId, previous.toAccountId);
 
     await prisma.$transaction(async client => {
       await client.transaction.delete({ where: { id: previous.id } });
-      await applyBalanceDelta(client, previous.accountId, previousDelta.negated());
+      await applyBalanceMovements(client, negateBalanceMovements(previousMovements));
     });
   }
 
@@ -373,7 +411,7 @@ class TransactionService {
   private async mustOwn(userId: number, uuid: string) {
     const transaction = await prisma.transaction.findFirst({
       where: { uuid, userId },
-      select: { id: true, accountId: true, type: true, amount: true },
+      select: { id: true, accountId: true, toAccountId: true, type: true, amount: true },
     });
 
     if (!transaction) throw new NotFoundError('Transaksi tidak ditemukan.');
