@@ -132,8 +132,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageOwnPr
     reportService.getAccountBalanceSummary(user.id),
   ]);
 
-  const bankAccounts = balance.accounts.filter(_account => _account.type === 'BANK');
-
   return (
     <div className="flex flex-col gap-4">
       <PageHeader title="Ringkasan" subtitle={period.subtitle}>
@@ -171,15 +169,17 @@ export default async function DashboardPage({ searchParams }: DashboardPageOwnPr
         </Card>
       </div>
 
-      <div className="grid items-start gap-4 lg:grid-cols-3">
-        <Card>
-          <p className="text-xs font-semibold text-gray-500">Saldo total</p>
-          <p className="mt-1 text-2xl font-bold lg:text-3xl">
-            <Money value={balance.totalBalance} />
-          </p>
-          <p className="mt-1 text-[11px] text-gray-400">dari {balance.accounts.length} akun aktif</p>
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Card className="flex flex-col">
+          <div className="mb-3">
+            <p className="text-xs font-semibold text-gray-500">Saldo total</p>
+            <p className="mt-1 text-2xl font-bold lg:text-3xl">
+              <Money value={balance.totalBalance} />
+            </p>
+            <p className="mt-1 text-[11px] text-gray-400">dari {balance.accounts.length} akun aktif</p>
+          </div>
 
-          <dl className="mt-3 flex flex-col gap-2 border-t border-gray-100 pt-3 text-xs">
+          <dl className="mt-auto flex flex-col gap-2 border-t border-gray-100 pt-3 text-xs">
             <div className="flex items-center justify-between gap-2">
               <dt className="flex items-center gap-1.5 text-gray-500">
                 <DynamicIcon icon="ph:money" fontSize="14px" />
@@ -203,17 +203,17 @@ export default async function DashboardPage({ searchParams }: DashboardPageOwnPr
 
         <Card className="lg:col-span-2">
           <SectionTitle
-            title="Saldo per Akun Bank"
+            title="Saldo per Akun"
             action={
               <Link href="/profile" className="text-xs font-semibold text-gray-500 hover:underline">
                 Kelola akun
               </Link>
             }
           />
-          {bankAccounts.length === 0 ? (
-            <EmptyState icon="ph:bank" title="Belum ada akun bank" description="Tambahkan akun bertipe bank dari halaman profil untuk melihat sebaran saldonya di sini." />
+          {balance.accounts.length === 0 ? (
+            <EmptyState icon="ph:wallet" title="Belum ada akun aktif" description="Tambahkan akun tunai atau bank dari halaman profil untuk melihat sebaran saldonya di sini." />
           ) : (
-            <AccountBalanceChart accounts={bankAccounts} />
+            <AccountBalanceChart accounts={balance.accounts} />
           )}
         </Card>
       </div>

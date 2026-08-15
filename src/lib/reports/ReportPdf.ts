@@ -6,20 +6,20 @@ import { dateRangeLabel, formatDateShort, MONTH_NAMES_ID, monthLabel } from '@/s
 import type { TransactionDTO } from '@/src/lib/transactions/TransactionService';
 import type { MonthlySummary, PeriodSummary, WeeklySummary, YearlySummary } from './ReportService';
 
-const A4_SIZE = { width: 595.28, height: 841.89 };
-const MARGIN = 40;
-const LINE_HEIGHT = 16;
+export const A4_SIZE = { width: 595.28, height: 841.89 };
+export const MARGIN = 40;
+export const LINE_HEIGHT = 16;
 
 const INK_COLOR = rgb(0.13, 0.13, 0.15);
-const MUTED_COLOR = rgb(0.45, 0.45, 0.5);
+export const MUTED_COLOR = rgb(0.45, 0.45, 0.5);
 const RULE_COLOR = rgb(0.85, 0.85, 0.88);
-const POSITIVE_COLOR = rgb(0.18, 0.5, 0.28);
-const NEGATIVE_COLOR = rgb(0.7, 0.24, 0.24);
+export const POSITIVE_COLOR = rgb(0.18, 0.5, 0.28);
+export const NEGATIVE_COLOR = rgb(0.7, 0.24, 0.24);
 const PANEL_COLOR = rgb(0.98, 0.96, 0.88);
 
-type ReportFonts = { regular: PDFFont; bold: PDFFont };
+export type ReportFonts = { regular: PDFFont; bold: PDFFont };
 
-type ReportColumns = { label: string; x: number; width: number; align?: 'right' }[];
+export type ReportColumns = { label: string; x: number; width: number; align?: 'right' }[];
 
 type ReportTextOptions = {
   x?: number;
@@ -80,7 +80,7 @@ function sanitize(value: string) {
  * @param {number} max - Lebar maksimum kolom dalam poin.
  * @returns {string} Teks utuh bila muat, atau versi terpotong berakhiran elipsis.
  */
-function truncate(value: string, font: PDFFont, size: number, max: number) {
+export function truncate(value: string, font: PDFFont, size: number, max: number) {
   const safeValue = sanitize(value);
   if (font.widthOfTextAtSize(safeValue, size) <= max) return safeValue;
 
@@ -101,7 +101,7 @@ function truncate(value: string, font: PDFFont, size: number, max: number) {
  * @param {ReportFonts} fonts - Pasangan font reguler dan tebal yang sudah di-embed.
  * @returns {Cursor} Kursor yang sudah berada di halaman pertama.
  */
-class Cursor {
+export class Cursor {
   page: PDFPage;
   y: number;
 
@@ -228,7 +228,7 @@ class Cursor {
  * @param {string} userName - Nama pemilik laporan.
  * @returns {void}
  */
-function drawHeader(cursor: Cursor, title: string, period: string, userName: string) {
+export function drawHeader(cursor: Cursor, title: string, period: string, userName: string) {
   cursor.text('Laporan Keuangan', { size: 18, bold: true });
   cursor.down(20);
   cursor.text(title, { size: 12, bold: true });
@@ -285,7 +285,7 @@ function drawSummaryPanel(cursor: Cursor, rows: ReportSummaryRow[]) {
  * @param {ReportColumns} columns - Definisi kolom tabel.
  * @returns {void}
  */
-function drawTableHead(cursor: Cursor, columns: ReportColumns) {
+export function drawTableHead(cursor: Cursor, columns: ReportColumns) {
   for (const _column of columns) {
     cursor.text(_column.label, {
       x: _column.x,

@@ -3,9 +3,17 @@
 import { useEffect, type ReactNode } from 'react';
 import DynamicIcon from '@/src/components/commons/DynamicIcon';
 
+type SheetSize = 'md' | 'lg';
+
+const SHEET_MAX_WIDTH: Record<SheetSize, string> = {
+  md: 'max-w-md',
+  lg: 'max-w-3xl',
+};
+
 type SheetOwnProps = {
   open: boolean;
   title: string;
+  size?: SheetSize;
   onClose: () => void;
   children: ReactNode;
 };
@@ -17,11 +25,12 @@ type SheetOwnProps = {
  * @param {SheetOwnProps} props - Props komponen.
  * @param {boolean} props.open - Panel ditampilkan bila true.
  * @param {string} props.title - Judul panel sekaligus label aksesibilitasnya.
+ * @param {SheetSize} props.size - Lebar maksimum panel, default md.
  * @param {() => void} props.onClose - Dijalankan saat panel diminta ditutup.
  * @param {ReactNode} props.children - Isi panel.
  * @returns {ReactNode} Panel beserta latar gelapnya, atau null bila sedang tertutup.
  */
-export function Sheet({ open, title, onClose, children }: SheetOwnProps) {
+export function Sheet({ open, title, size = 'md', onClose, children }: SheetOwnProps) {
   useEffect(() => {
     if (!open) return;
 
@@ -44,7 +53,12 @@ export function Sheet({ open, title, onClose, children }: SheetOwnProps) {
     <div className="fixed inset-0 z-[60] flex items-end justify-center sm:items-center">
       <button type="button" aria-label="Tutup" onClick={onClose} className="absolute inset-0 bg-black/40" />
 
-      <div role="dialog" aria-modal="true" aria-label={title} className="relative max-h-[90vh] w-full max-w-md overflow-y-auto rounded-t-3xl bg-white p-5 shadow-xl sm:rounded-3xl">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        className={`relative max-h-[90vh] w-full ${SHEET_MAX_WIDTH[size]} overflow-y-auto rounded-t-3xl bg-white p-5 shadow-xl sm:rounded-3xl`}
+      >
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-base font-bold text-gray-800">{title}</h2>
           <button type="button" onClick={onClose} aria-label="Tutup" className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-50 hover:text-gray-700">

@@ -20,6 +20,17 @@ function getAccountColor(color: string | null, index: number) {
 }
 
 /**
+ * Menyusun keterangan singkat sebuah akun untuk baris daftar: nama banknya bila
+ * tersimpan, atau jenis akunnya bila akun itu memang tidak menyimpan nama bank
+ * seperti pada akun tunai.
+ * @param {AccountBalancePoint} account - Akun yang keterangannya disusun.
+ * @returns {string} Nama bank akun tersebut, atau label jenis akunnya.
+ */
+function getAccountLabel(account: AccountBalancePoint) {
+  return account.bankName ?? (account.type === 'BANK' ? 'Bank' : 'Tunai');
+}
+
+/**
  * Grafik komposisi saldo per akun. Tiap akun digambar sebagai potongan bulat
  * berwarna miliknya yang saling bertumpuk dalam satu batang, dengan cincin
  * putih setebal dua piksel sebagai pemisah supaya batas antar potongan tetap
@@ -67,7 +78,7 @@ export default function AccountBalanceChart({ accounts }: AccountBalanceChartOwn
             <div className="min-w-0 flex-1">
               <p className="truncate text-xs font-semibold text-gray-700">{_segment.name}</p>
               <p className="truncate text-[11px] text-gray-400">
-                {_segment.bankName ?? 'Tanpa nama bank'} · {Math.round(_segment.share * 100)}%
+                {getAccountLabel(_segment)} · {Math.round(_segment.share * 100)}%
               </p>
             </div>
 

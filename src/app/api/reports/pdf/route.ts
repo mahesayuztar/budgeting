@@ -2,15 +2,18 @@ import { z } from 'zod';
 import { handleApiError } from '@/src/lib/ApiResponse';
 import { requireApiUser } from '@/src/lib/auth/AuthDal';
 import { reportService } from '@/src/lib/reports/ReportService';
-import { getReportFilename } from '@/src/lib/reports/ReportApi';
+import { reportHistoryService } from '@/src/lib/reports/ReportHistoryService';
+import { getReportFilename, getReportLabel, type ReportParams } from '@/src/lib/reports/ReportApi';
 import { buildMonthlyReportPdf, buildWeeklyReportPdf, buildYearlyReportPdf } from '@/src/lib/reports/ReportPdf';
-import { weekRange } from '@/src/helpers/DateHelper';
+import { buildAccountBalanceHistoryPdf, buildDebtHistoryPdf, buildDebtPaymentHistoryPdf, buildTransactionHistoryPdf } from '@/src/lib/reports/ReportHistoryPdf';
+import { monthLabel, monthRange, weekLabel, weekRange, yearRange } from '@/src/helpers/DateHelper';
 import { transactionService } from '@/src/lib/transactions/TransactionService';
 
 export const dynamic = 'force-dynamic';
 
 const querySchema = z
   .object({
+    report: z.enum(['summary', 'account-balance', 'transactions', 'payable', 'receivable', 'payable-payment', 'receivable-payment']).default('summary'),
     period: z.enum(['weekly', 'monthly', 'yearly']).default('monthly'),
     year: z.coerce.number().int().min(2000).max(2100).optional(),
     month: z.coerce.number().int().min(1).max(12).optional(),
@@ -35,76 +38,102 @@ const querySchema = z
 type ReportQuery = z.infer<typeof querySchema>;
 
 /**
- * Menyusun berkas PDF laporan bulanan beserta nama berkasnya.
- * @param {number} userId - ID pengguna pemilik laporan.
- * @param {string} userName - Nama pengguna yang dicetak di kepala laporan.
- * @param {number} year - Tahun periode laporan.
- * @param {number} month - Bulan periode laporan dengan Januari bernilai 1.
- * @returns {Promise<{ bytes: Uint8Array; filename: string }>} Isi berkas PDF dan nama berkasnya.
+ * Menyusun kembali parameter laporan dari query yang sudah tervalidasi, supaya
+ * nama berkasnya dibentuk oleh function yang sama dengan yang dipakai klien.
+ * @param {ReportQuery} query - Query laporan yang sudah tervalidasi.
+ * @returns {ReportParams} Parameter laporan sesuai periodenya.
  */
-async function buildMonthlyReport(userId: number, userName: string, year: number, month: number) {
-  const [summary, transactions] = await Promise.all([reportService.getMonthlySummary(userId, year, month), transactionService.listAllInPeriod(userId, year, month)]);
+function toReportParams(query: ReportQuery): ReportParams {
+  if (query.period === 'weekly') return { report: query.report, period: 'weekly', date: query.date! };
+  if (query.period === 'yearly') return { report: query.report, period: 'yearly', year: query.year! };
 
-  return {
-    bytes: await buildMonthlyReportPdf({ userName, summary, transactions }),
-    filename: getReportFilename({ period: 'monthly', year, month }),
-  };
+  return { report: query.report, period: 'monthly', year: query.year!, month: query.month! };
 }
 
 /**
- * Menyusun berkas PDF laporan tujuh hari terakhir beserta nama berkasnya.
- * @param {number} userId - ID pengguna pemilik laporan.
- * @param {string} userName - Nama pengguna yang dicetak di kepala laporan.
- * @param {string} referenceDate - Tanggal acuan akhir rentang dalam format `YYYY-MM-DD`.
- * @returns {Promise<{ bytes: Uint8Array; filename: string }>} Isi berkas PDF dan nama berkasnya.
+ * Menerjemahkan periode laporan menjadi rentang tanggal beserta labelnya.
+ * Parameter wajib tiap periode sudah dipastikan schema, sehingga nilainya aman
+ * dibaca di cabang masing-masing.
+ * @param {ReportQuery} query - Query laporan yang sudah tervalidasi.
+ * @returns {{ start: Date; end: Date; periodLabel: string }} Rentang tanggal dan label periodenya.
  */
-async function buildWeeklyReport(userId: number, userName: string, referenceDate: string) {
-  const { start, end } = weekRange(referenceDate);
-  const [summary, transactions] = await Promise.all([reportService.getWeeklySummary(userId, referenceDate), transactionService.listAllInRange(userId, start, end)]);
+function resolveReportRange(query: ReportQuery) {
+  if (query.period === 'weekly') {
+    const { start, end } = weekRange(query.date!);
+    return { start, end, periodLabel: weekLabel(query.date!) };
+  }
 
-  return {
-    bytes: await buildWeeklyReportPdf({ userName, summary, transactions }),
-    filename: getReportFilename({ period: 'weekly', date: referenceDate }),
-  };
+  if (query.period === 'yearly') {
+    const { start, end } = yearRange(query.year!);
+    return { start, end, periodLabel: String(query.year) };
+  }
+
+  const { start, end } = monthRange(query.year!, query.month!);
+  return { start, end, periodLabel: monthLabel(query.year!, query.month!) };
 }
 
 /**
- * Menyusun berkas PDF laporan tahunan beserta nama berkasnya.
+ * Menyusun isi PDF laporan ringkasan keuangan sesuai periodenya.
  * @param {number} userId - ID pengguna pemilik laporan.
  * @param {string} userName - Nama pengguna yang dicetak di kepala laporan.
- * @param {number} year - Tahun periode laporan.
- * @returns {Promise<{ bytes: Uint8Array; filename: string }>} Isi berkas PDF dan nama berkasnya.
+ * @param {ReportQuery} query - Query laporan yang sudah tervalidasi.
+ * @returns {Promise<Uint8Array>} Isi berkas PDF ringkasan.
  */
-async function buildYearlyReport(userId: number, userName: string, year: number) {
-  const summary = await reportService.getYearlySummary(userId, year);
+async function buildSummaryBytes(userId: number, userName: string, query: ReportQuery) {
+  if (query.period === 'weekly') {
+    const { start, end } = weekRange(query.date!);
+    const [summary, transactions] = await Promise.all([reportService.getWeeklySummary(userId, query.date!), transactionService.listAllInRange(userId, start, end)]);
+    return buildWeeklyReportPdf({ userName, summary, transactions });
+  }
 
-  return {
-    bytes: await buildYearlyReportPdf({ userName, summary }),
-    filename: getReportFilename({ period: 'yearly', year }),
-  };
+  if (query.period === 'yearly') {
+    const summary = await reportService.getYearlySummary(userId, query.year!);
+    return buildYearlyReportPdf({ userName, summary });
+  }
+
+  const [summary, transactions] = await Promise.all([
+    reportService.getMonthlySummary(userId, query.year!, query.month!),
+    transactionService.listAllInPeriod(userId, query.year!, query.month!),
+  ]);
+
+  return buildMonthlyReportPdf({ userName, summary, transactions });
 }
 
 /**
- * Memilih penyusun laporan yang sesuai dengan periode yang diminta. Parameter
- * wajib tiap periode sudah dipastikan schema, sehingga nilainya aman dibaca di
- * cabang masing-masing.
+ * Menyusun isi PDF salah satu laporan riwayat. Hutang dan piutang memakai
+ * penyusun yang sama karena bentuk kolomnya identik, hanya jenis catatannya
+ * yang berbeda; hal yang sama berlaku untuk kedua laporan pembayarannya.
  * @param {number} userId - ID pengguna pemilik laporan.
  * @param {string} userName - Nama pengguna yang dicetak di kepala laporan.
- * @param {ReportQuery} query - Periode laporan beserta parameternya yang sudah tervalidasi.
- * @returns {Promise<{ bytes: Uint8Array; filename: string }>} Isi berkas PDF dan nama berkasnya.
+ * @param {ReportQuery} query - Query laporan yang sudah tervalidasi.
+ * @returns {Promise<Uint8Array>} Isi berkas PDF riwayat.
  */
-async function buildReport(userId: number, userName: string, query: ReportQuery) {
-  if (query.period === 'weekly') return buildWeeklyReport(userId, userName, query.date!);
-  if (query.period === 'yearly') return buildYearlyReport(userId, userName, query.year!);
+async function buildHistoryBytes(userId: number, userName: string, query: ReportQuery) {
+  const { start, end, periodLabel } = resolveReportRange(query);
+  const context = { title: getReportLabel(query.report), period: periodLabel, userName };
 
-  return buildMonthlyReport(userId, userName, query.year!, query.month!);
+  if (query.report === 'account-balance') {
+    return buildAccountBalanceHistoryPdf(context, await reportHistoryService.getAccountBalanceHistory(userId, start, end));
+  }
+
+  if (query.report === 'transactions') {
+    return buildTransactionHistoryPdf(context, await reportHistoryService.getTransactionHistory(userId, start, end));
+  }
+
+  if (query.report === 'payable' || query.report === 'receivable') {
+    const type = query.report === 'payable' ? 'PAYABLE' : 'RECEIVABLE';
+    return buildDebtHistoryPdf(context, await reportHistoryService.getDebtHistory(userId, type, start, end));
+  }
+
+  const type = query.report === 'payable-payment' ? 'PAYABLE' : 'RECEIVABLE';
+  return buildDebtPaymentHistoryPdf(context, await reportHistoryService.getDebtPaymentHistory(userId, type, start, end));
 }
 
 /**
- * Mengirim laporan keuangan pengguna yang sedang masuk sebagai berkas PDF.
- * pdf-lib mengembalikan Uint8Array, sedangkan Buffer yang membungkusnya sudah
- * memenuhi tipe BodyInit sehingga dapat langsung dijadikan body respons.
- * @param {Request} request - Permintaan HTTP beserta query params periode laporan.
+ * Mengirim laporan pengguna yang sedang masuk sebagai berkas PDF. pdf-lib
+ * mengembalikan Uint8Array, sedangkan Buffer yang membungkusnya sudah memenuhi
+ * tipe BodyInit sehingga dapat langsung dijadikan body respons.
+ * @param {Request} request - Permintaan HTTP beserta query params jenis dan periode laporan.
  * @returns {Promise<Response>} Berkas PDF laporan, atau respons error.
  */
 export async function GET(request: Request) {
@@ -113,12 +142,12 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const query = querySchema.parse(Object.fromEntries(searchParams));
 
-    const { bytes, filename } = await buildReport(user.id, user.name, query);
+    const bytes = query.report === 'summary' ? await buildSummaryBytes(user.id, user.name, query) : await buildHistoryBytes(user.id, user.name, query);
 
     return new Response(Buffer.from(bytes), {
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Content-Disposition': `attachment; filename="${getReportFilename(toReportParams(query))}"`,
         'Cache-Control': 'no-store',
       },
     });
