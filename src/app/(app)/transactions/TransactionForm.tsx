@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState, type FormEvent } from 'react';
 import { Button } from '@/src/components/ui/Button';
-import { Input, MoneyInput, Select, type SelectOption } from '@/src/components/ui/Field';
+import { Input, MoneyInput, Select } from '@/src/components/ui/Field';
 import { ErrorAlert } from '@/src/components/ui/Alert';
 import { Sheet } from '@/src/components/ui/Sheet';
 import { useApiMutation } from '@/src/hooks/useApiMutation';
@@ -11,25 +11,10 @@ import { syncSavedTransactionToCache } from '@/src/lib/transactions/TransactionQ
 import { toTransactionInput, type TransactionFormState } from '@/src/lib/transactions/TransactionFormState';
 import type { CategoryDTO } from '@/src/lib/categories/CategoryService';
 import type { AccountDTO } from '@/src/lib/accounts/AccountService';
+import { toAccountSelectOptions } from '@/src/lib/accounts/AccountSelectOptions';
 import type { TransactionInput } from '@/src/lib/transactions/TransactionValidator';
 
 type TransactionType = TransactionFormState['type'];
-
-/**
- * Menyusun opsi select dari daftar akun. Akun bank diberi keterangan nama bank
- * dan nomor rekening supaya dua akun dengan nama mirip tetap dapat dibedakan.
- * @param {AccountDTO[]} accounts - Akun yang akan dijadikan opsi.
- * @returns {SelectOption[]} Opsi select siap pakai.
- */
-function toAccountOptions(accounts: AccountDTO[]): SelectOption[] {
-  return accounts.map(_account => ({
-    value: _account.uuid,
-    label: _account.name,
-    description: _account.type === 'BANK' ? [_account.bankName, _account.accountNumber].filter(Boolean).join(' • ') : 'Cash',
-    icon: _account.type === 'BANK' ? 'ph:bank' : 'ph:wallet',
-    color: _account.color ?? '#F1F1F1',
-  }));
-}
 
 const TRANSACTION_TYPE_OPTIONS: ReadonlyArray<{ value: TransactionType; label: string }> = [
   { value: 'EXPENSE', label: 'Pengeluaran' },
@@ -76,8 +61,8 @@ export default function TransactionForm({ categories, accounts, editingUuid, ini
   const isTransfer = form.type === 'TRANSFER';
   const transferCategory = useMemo(() => categories.find(_category => _category.type === 'TRANSFER'), [categories]);
   const visibleCategories = useMemo(() => categories.filter(_category => _category.type === form.type), [categories, form.type]);
-  const sourceOptions = useMemo(() => toAccountOptions(accounts), [accounts]);
-  const destinationOptions = useMemo(() => toAccountOptions(accounts.filter(_account => _account.uuid !== form.accountUuid)), [accounts, form.accountUuid]);
+  const sourceOptions = useMemo(() => toAccountSelectOptions(accounts), [accounts]);
+  const destinationOptions = useMemo(() => toAccountSelectOptions(accounts.filter(_account => _account.uuid !== form.accountUuid)), [accounts, form.accountUuid]);
 
   function setSourceAccount(accountUuid: string) {
     setForm(_previous => ({

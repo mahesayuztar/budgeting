@@ -68,12 +68,26 @@ type DataTableOwnProps<TData extends RowData> = {
  * Rangka baris abu-abu berdenyut yang menggantikan tabel selama data dimuat.
  * @returns {ReactNode} Lima baris rangka bertinggi tetap.
  */
-function TableSkeleton() {
+export function TableSkeleton() {
   return (
-    <div className="flex animate-pulse flex-col gap-2 py-2">
+    <div role="status" aria-live="polite" aria-label="Memuat data tabel" className="flex animate-pulse flex-col gap-2 py-2">
       {Array.from({ length: 5 }, (_unused, _index) => (
         <div key={`table_skeleton__row_${_index}`} className="h-10 rounded-lg bg-gray-100" />
       ))}
+    </div>
+  );
+}
+
+/**
+ * Indikator ringkas saat cursor berikutnya sedang dimuat. Spinner dibuat dari
+ * CSS sehingga tidak menunggu ikon jaringan dan tetap langsung terlihat.
+ * @returns {ReactNode} Status pemuatan halaman berikutnya.
+ */
+export function TableNextPageLoader() {
+  return (
+    <div role="status" aria-live="polite" className="flex items-center justify-center gap-2 py-2 text-xs font-semibold text-gray-400">
+      <span aria-hidden className="h-4 w-4 animate-spin rounded-full border-2 border-gray-200 border-t-gray-500" />
+      <span>Memuat data berikutnya...</span>
     </div>
   );
 }
@@ -167,6 +181,7 @@ export function DataTable<TData extends RowData>({
   });
 
   const sentinelRef = useRef<HTMLDivElement>(null);
+  const nextPageRequestRef = useRef(false);
   const { hasNextPage, isFetchingNextPage, fetchNextPage } = query;
 
   useEffect(() => {
@@ -175,7 +190,12 @@ export function DataTable<TData extends RowData>({
 
     const observer = new IntersectionObserver(
       _entries => {
-        if (_entries[0]?.isIntersecting && !isFetchingNextPage) fetchNextPage();
+        if (!_entries[0]?.isIntersecting || isFetchingNextPage || nextPageRequestRef.current) return;
+
+        nextPageRequestRef.current = true;
+        void fetchNextPage({ cancelRefetch: false }).finally(() => {
+          nextPageRequestRef.current = false;
+        });
       },
       { rootMargin: '300px' },
     );
@@ -208,7 +228,7 @@ export function DataTable<TData extends RowData>({
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div aria-busy={query.isFetching} className="flex flex-col gap-3">
       <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
         <div className="relative w-full sm:max-w-xs">
           <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
@@ -408,7 +428,7 @@ export function DataTable<TData extends RowData>({
 
       <div ref={sentinelRef} aria-hidden className="h-px" />
 
-      {isFetchingNextPage && <p className="py-2 text-center text-xs font-semibold text-gray-400">Memuat lebih banyak...</p>}
+      {isFetchingNextPage && <TableNextPageLoader />}
 
       {!hasNextPage && rows.length > 0 && <p className="py-2 text-center text-[11px] text-gray-300">Semua data sudah ditampilkan</p>}
 

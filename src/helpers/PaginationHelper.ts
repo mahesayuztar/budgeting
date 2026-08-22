@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
-export const DEFAULT_PAGE_SIZE = 25;
-export const MAX_PAGE_SIZE = 100;
+export const DEFAULT_PAGE_SIZE = 15;
+export const MAX_PAGE_SIZE = DEFAULT_PAGE_SIZE;
 
 export const cursorParamsSchema = z.object({
   q: z.string().trim().max(80).optional(),
