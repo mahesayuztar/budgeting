@@ -104,6 +104,7 @@ function PaymentSheet({ debt, accounts, payment, onClose, onSaved }: PaymentShee
 function PaymentHistory({ debt, accounts, onDone }: { debt: DebtDTO; accounts: AccountDTO[]; onDone: () => void }) {
   const [editing, setEditing] = useState<DebtPaymentDTO | null>(null);
   const [deleting, setDeleting] = useState<DebtPaymentDTO | null>(null);
+  const [actionPayment, setActionPayment] = useState<DebtPaymentDTO | null>(null);
   const removal = useApiMutation((paymentUuid: string) => debtApi.removePayment(debt.uuid, paymentUuid), {
     invalidateKeys: [['debts']],
     updateCache: syncSavedDebtToCache,
@@ -117,15 +118,19 @@ function PaymentHistory({ debt, accounts, onDone }: { debt: DebtDTO; accounts: A
   }
 
   return (
-    <div className="mx-2 mb-3 rounded-2xl border border-gray-100 bg-gray-50/70 p-3 sm:mx-4 sm:p-4">
+    <div className="mb-3 rounded-xl border border-gray-100 bg-gray-50/70 p-2.5 sm:mx-4 sm:rounded-2xl sm:p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <p className="text-xs font-bold uppercase tracking-wide text-gray-500">Riwayat pembayaran</p>
           <p className="mt-0.5 text-[11px] text-gray-400">{debt.payments.length} pembayaran tercatat</p>
         </div>
-        <span className="text-xs font-semibold text-gray-500">
+        <span className="shrink-0 text-right text-[11px] font-semibold text-gray-500 sm:text-xs">
           Total <Money value={debt.paidAmount} />
         </span>
+      </div>
+
+      <div className="mb-3 sm:hidden">
+        <RowActions debt={debt} accounts={accounts} onDone={onDone} expanded />
       </div>
 
       {debt.payments.length === 0 ? (
@@ -133,7 +138,10 @@ function PaymentHistory({ debt, accounts, onDone }: { debt: DebtDTO; accounts: A
       ) : (
         <ul className="flex flex-col gap-2">
           {debt.payments.map(_payment => (
-            <li key={`debt_payment__${_payment.uuid}`} className="flex items-center gap-3 rounded-xl border border-gray-100 bg-white px-3 py-2.5 shadow-sm shadow-gray-100/50">
+            <li
+              key={`debt_payment__${_payment.uuid}`}
+              className="flex items-center gap-2 rounded-xl border border-gray-100 bg-white px-2.5 py-2.5 shadow-sm shadow-gray-100/50 sm:gap-3 sm:px-3"
+            >
               <span
                 className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${_payment.isOpeningBalance ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'}`}
               >
@@ -153,26 +161,72 @@ function PaymentHistory({ debt, accounts, onDone }: { debt: DebtDTO; accounts: A
               </div>
               <button
                 type="button"
-                onClick={() => setEditing(_payment)}
-                aria-label="Ubah pembayaran"
-                className="rounded-lg p-1.5 text-gray-300 hover:bg-gray-100 hover:text-gray-600"
+                onClick={() => setActionPayment(_payment)}
+                aria-label="Aksi pembayaran"
+                className="shrink-0 rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 sm:hidden"
               >
-                <DynamicIcon icon="ph:pencil-simple" fontSize="15px" />
+                <DynamicIcon icon="ph:dots-three-vertical" fontSize="17px" />
               </button>
-              <button
-                type="button"
-                onClick={() => setDeleting(_payment)}
-                aria-label="Hapus pembayaran"
-                className="rounded-lg p-1.5 text-gray-300 hover:bg-red-50 hover:text-red-500"
-              >
-                <DynamicIcon icon="ph:trash" fontSize="15px" />
-              </button>
+              <div className="hidden shrink-0 items-center sm:flex">
+                <button
+                  type="button"
+                  onClick={() => setEditing(_payment)}
+                  aria-label="Ubah pembayaran"
+                  className="rounded-lg p-1.5 text-gray-300 hover:bg-gray-100 hover:text-gray-600"
+                >
+                  <DynamicIcon icon="ph:pencil-simple" fontSize="15px" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDeleting(_payment)}
+                  aria-label="Hapus pembayaran"
+                  className="rounded-lg p-1.5 text-gray-300 hover:bg-red-50 hover:text-red-500"
+                >
+                  <DynamicIcon icon="ph:trash" fontSize="15px" />
+                </button>
+              </div>
             </li>
           ))}
         </ul>
       )}
 
       {editing && <PaymentSheet debt={debt} accounts={accounts} payment={editing} onClose={() => setEditing(null)} onSaved={onDone} />}
+      {actionPayment && (
+        <Sheet open title="Aksi Pembayaran" onClose={() => setActionPayment(null)}>
+          <div className="flex flex-col gap-3">
+            <div className="rounded-xl bg-gray-50 px-4 py-3">
+              <p className="text-sm font-bold text-gray-800">
+                <Money value={actionPayment.amount} />
+              </p>
+              <p className="mt-0.5 text-xs text-gray-400">
+                {formatDateID(actionPayment.paidAt)} · {actionPayment.isOpeningBalance ? 'Saldo awal' : (actionPayment.account?.name ?? 'Tanpa akun')}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setEditing(actionPayment);
+                setActionPayment(null);
+              }}
+              className="inline-flex w-full items-center gap-3 rounded-xl border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-700"
+            >
+              <DynamicIcon icon="ph:pencil-simple" fontSize="17px" />
+              Ubah pembayaran
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setDeleting(actionPayment);
+                setActionPayment(null);
+              }}
+              className="inline-flex w-full items-center gap-3 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-left text-sm font-semibold text-red-600"
+            >
+              <DynamicIcon icon="ph:trash" fontSize="17px" />
+              Hapus pembayaran
+            </button>
+          </div>
+        </Sheet>
+      )}
       <ConfirmModal
         open={Boolean(deleting)}
         icon="ph:trash"
@@ -187,7 +241,7 @@ function PaymentHistory({ debt, accounts, onDone }: { debt: DebtDTO; accounts: A
   );
 }
 
-function RowActions({ debt, accounts, onDone }: { debt: DebtDTO; accounts: AccountDTO[]; onDone: () => void }) {
+function RowActions({ debt, accounts, onDone, expanded = false }: { debt: DebtDTO; accounts: AccountDTO[]; onDone: () => void; expanded?: boolean }) {
   const [addingPayment, setAddingPayment] = useState(false);
   const [confirmingRemoval, setConfirmingRemoval] = useState(false);
   const removal = useApiMutation(debtApi.remove, { invalidateKeys: [['debts']] });
@@ -199,15 +253,20 @@ function RowActions({ debt, accounts, onDone }: { debt: DebtDTO; accounts: Accou
   }
 
   return (
-    <div className="flex items-center justify-end gap-1">
+    <div className={`flex items-center gap-2 ${expanded ? 'w-full' : 'justify-end gap-1'}`}>
       {debt.status === 'OPEN' && (
         <button
           type="button"
           onClick={() => setAddingPayment(true)}
           aria-label={`Catat pembayaran untuk ${debt.party}`}
-          className="rounded-lg p-1.5 text-gray-400 hover:bg-emerald-50 hover:text-emerald-600"
+          className={
+            expanded
+              ? 'inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700'
+              : 'rounded-lg p-1.5 text-gray-400 hover:bg-emerald-50 hover:text-emerald-600'
+          }
         >
           <DynamicIcon icon="ph:cash-register" fontSize="16px" />
+          {expanded && 'Catat bayar'}
         </button>
       )}
       <button
@@ -215,9 +274,14 @@ function RowActions({ debt, accounts, onDone }: { debt: DebtDTO; accounts: Accou
         disabled={removal.pending}
         aria-label={`Hapus catatan ${debt.party}`}
         onClick={() => setConfirmingRemoval(true)}
-        className="rounded-lg p-1.5 text-gray-300 hover:bg-red-50 hover:text-red-500 disabled:opacity-40"
+        className={
+          expanded
+            ? 'inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-bold text-red-500 disabled:opacity-40'
+            : 'rounded-lg p-1.5 text-gray-300 hover:bg-red-50 hover:text-red-500 disabled:opacity-40'
+        }
       >
         <DynamicIcon icon="ph:trash" fontSize="16px" />
+        {expanded && 'Hapus'}
       </button>
 
       {addingPayment && <PaymentSheet debt={debt} accounts={accounts} onClose={() => setAddingPayment(false)} onSaved={onDone} />}
@@ -244,7 +308,7 @@ export default function DebtsTable({ type, initialPage, accounts }: DebtsTableOw
       {
         id: 'party',
         header: 'Pihak',
-        meta: { className: 'w-full max-w-0' },
+        meta: { className: 'w-[42vw] max-w-0 sm:w-full' },
         cell: ({ row }) => {
           const debt = row.original;
           const isReceivable = debt.type === 'RECEIVABLE';
@@ -306,7 +370,7 @@ export default function DebtsTable({ type, initialPage, accounts }: DebtsTableOw
         id: 'remaining',
         header: 'Sisa',
         cell: ({ row }) => (
-          <span className="whitespace-nowrap font-bold">
+          <span className="whitespace-nowrap text-sm font-bold sm:text-base">
             <Money value={row.original.remaining} tone={row.original.type === 'RECEIVABLE' ? 'income' : 'expense'} />
           </span>
         ),
@@ -316,7 +380,7 @@ export default function DebtsTable({ type, initialPage, accounts }: DebtsTableOw
         id: 'actions',
         header: '',
         cell: ({ row }) => <RowActions debt={row.original} accounts={accounts} onDone={refresh} />,
-        meta: { className: 'w-20 text-right', headerClassName: 'w-20' },
+        meta: { className: 'hidden text-right sm:table-cell sm:w-20', headerClassName: 'hidden sm:table-cell sm:w-20' },
       },
     ],
     [accounts, refresh],
