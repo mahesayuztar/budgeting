@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { requireAuthUser } from '@/src/lib/auth/AuthDal';
 import { debtService } from '@/src/lib/debts/DebtService';
 import { reportService } from '@/src/lib/reports/ReportService';
+import { accountService } from '@/src/lib/accounts/AccountService';
 import { Card } from '@/src/components/ui/Card';
 import { PageHeader } from '@/src/components/ui/PageHeader';
 import { Money } from '@/src/components/ui/Money';
@@ -32,7 +33,11 @@ export default async function DebtsPage({ searchParams }: DebtsPageOwnProps) {
 
   const activeType = rawType === 'RECEIVABLE' ? 'RECEIVABLE' : 'PAYABLE';
 
-  const [initialPage, summary] = await Promise.all([debtService.list(user.id, { type: activeType }), reportService.getDebtSummary(user.id)]);
+  const [initialPage, summary, accounts] = await Promise.all([
+    debtService.list(user.id, { type: activeType }),
+    reportService.getDebtSummary(user.id),
+    accountService.list(user.id),
+  ]);
 
   const outstanding = activeType === 'RECEIVABLE' ? summary.receivableOutstanding : summary.payableOutstanding;
 
@@ -50,7 +55,7 @@ export default async function DebtsPage({ searchParams }: DebtsPageOwnProps) {
             </Link>
           ))}
         </div>
-        <DebtForm />
+        <DebtForm accounts={accounts} />
       </PageHeader>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -77,7 +82,7 @@ export default async function DebtsPage({ searchParams }: DebtsPageOwnProps) {
       </div>
 
       <Card>
-        <DebtsTable type={activeType} initialPage={initialPage} />
+        <DebtsTable type={activeType} initialPage={initialPage} accounts={accounts} />
       </Card>
     </div>
   );

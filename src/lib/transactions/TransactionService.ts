@@ -2,7 +2,7 @@ import 'server-only';
 
 import { Prisma, type AccountType, type TransactionType } from '@prisma/client';
 import { prisma } from '@/src/lib/Prisma';
-import { NotFoundError } from '@/src/lib/Errors';
+import { ConflictError, NotFoundError } from '@/src/lib/Errors';
 import { toAmount } from '@/src/helpers/MoneyHelper';
 import { monthRange, toDateOnly, yearRange } from '@/src/helpers/DateHelper';
 import { buildPage, decodeCursor, DEFAULT_PAGE_SIZE, encodeCursor, type Page } from '@/src/helpers/PaginationHelper';
@@ -394,6 +394,7 @@ class TransactionService {
    */
   async update(userId: number, uuid: string, input: TransactionInput): Promise<TransactionDTO> {
     const previous = await this.mustOwn(userId, uuid);
+    if (previous.debtId) throw new ConflictError('Transaksi otomatis hutang/piutang harus diubah dari menu Hutang & Piutang.');
     const categoryId = await resolveTransactionCategoryId(userId, input.type, input.categoryUuid);
     const accountId = await resolveAccountId(userId, input.accountUuid);
     const toAccountId = input.type === 'TRANSFER' ? await resolveAccountId(userId, input.toAccountUuid) : null;
@@ -436,6 +437,7 @@ class TransactionService {
    */
   async remove(userId: number, uuid: string): Promise<void> {
     const previous = await this.mustOwn(userId, uuid);
+    if (previous.debtId) throw new ConflictError('Transaksi otomatis hutang/piutang harus dihapus dari menu Hutang & Piutang.');
     const previousMovements = getBalanceMovements(previous.type, previous.amount, previous.accountId, previous.toAccountId);
 
     await prisma.$transaction(async client => {
@@ -457,7 +459,7 @@ class TransactionService {
   private async mustOwn(userId: number, uuid: string) {
     const transaction = await prisma.transaction.findFirst({
       where: { uuid, userId },
-      select: { id: true, accountId: true, toAccountId: true, type: true, amount: true },
+      select: { id: true, debtId: true, accountId: true, toAccountId: true, type: true, amount: true },
     });
 
     if (!transaction) throw new NotFoundError('Transaksi tidak ditemukan.');

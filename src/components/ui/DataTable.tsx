@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import { flexRender, tableFeatures, useTable, type ColumnDef, type RowData } from '@tanstack/react-table';
 import { keepPreviousData, useInfiniteQuery } from '@tanstack/react-query';
 import DynamicIcon from '@/src/components/commons/DynamicIcon';
@@ -61,6 +61,7 @@ type DataTableOwnProps<TData extends RowData> = {
   emptyTitle: string;
   emptyDescription?: string;
   toolbar?: ReactNode;
+  renderExpandedRow?: (row: TData) => ReactNode;
 };
 
 /**
@@ -111,10 +112,12 @@ export function DataTable<TData extends RowData>({
   emptyTitle,
   emptyDescription,
   toolbar,
+  renderExpandedRow,
 }: DataTableOwnProps<TData>) {
   const [search, setSearch] = useState('');
   const [filterValues, setFilterValues] = useState<DataTableFilterValues>({});
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
+  const [expandedRowIds, setExpandedRowIds] = useState<Set<string>>(() => new Set());
   const debouncedSearch = useDebouncedValue(search, 300);
   const isSearching = debouncedSearch.trim().length > 0;
   const activeFilters = useMemo(
@@ -188,6 +191,20 @@ export function DataTable<TData extends RowData>({
   function getVisibleFilterOptions(filter: DataTableFilter) {
     const parentValue = filter.parentId ? filterValues[filter.parentId] : undefined;
     return parentValue ? filter.options.filter(_option => !_option.parentValue || _option.parentValue === parentValue) : filter.options;
+  }
+
+  function toggleExpandedRow(rowId: string) {
+    setExpandedRowIds(_current => {
+      const next = new Set(_current);
+      if (next.has(rowId)) next.delete(rowId);
+      else next.add(rowId);
+      return next;
+    });
+  }
+
+  function handleRowClick(event: MouseEvent<HTMLTableRowElement>, rowId: string) {
+    if (!renderExpandedRow || (event.target as HTMLElement).closest('button, a, input, select, textarea, [role="button"]')) return;
+    toggleExpandedRow(rowId);
   }
 
   return (
@@ -332,23 +349,58 @@ export function DataTable<TData extends RowData>({
                       {_header.isPlaceholder ? null : flexRender(_header.column.columnDef.header, _header.getContext())}
                     </th>
                   ))}
+                  {renderExpandedRow && <th aria-label="Detail" className="w-10 rounded-r-lg px-2 py-2.5" />}
                 </tr>
               ))}
             </thead>
 
             <tbody>
-              {table.getRowModel().rows.map(_row => (
-                <tr key={`data_table__row_${_row.id}`} className="group align-middle transition-colors hover:bg-theme-light/70">
-                  {_row.getAllCells().map(_cell => (
-                    <td
-                      key={`data_table__cell_${_cell.id}`}
-                      className={`border-b border-gray-50 px-3 py-2.5 first:rounded-l-lg last:rounded-r-lg ${_cell.column.columnDef.meta?.className ?? ''}`}
+              {table.getRowModel().rows.map(_row => {
+                const isExpanded = expandedRowIds.has(_row.id);
+
+                return (
+                  <Fragment key={`data_table__row_${_row.id}`}>
+                    <tr
+                      onClick={event => handleRowClick(event, _row.id)}
+                      aria-expanded={renderExpandedRow ? isExpanded : undefined}
+                      className={`group align-middle transition-colors hover:bg-theme-light/70 ${renderExpandedRow ? 'cursor-pointer' : ''}`}
                     >
-                      {flexRender(_cell.column.columnDef.cell, _cell.getContext())}
-                    </td>
-                  ))}
-                </tr>
-              ))}
+                      {_row.getAllCells().map(_cell => (
+                        <td
+                          key={`data_table__cell_${_cell.id}`}
+                          className={`border-b border-gray-50 px-3 py-2.5 first:rounded-l-lg last:rounded-r-lg ${_cell.column.columnDef.meta?.className ?? ''}`}
+                        >
+                          {flexRender(_cell.column.columnDef.cell, _cell.getContext())}
+                        </td>
+                      ))}
+                      {renderExpandedRow && (
+                        <td className="w-10 border-b border-gray-50 px-2 py-2.5 text-right">
+                          <button
+                            type="button"
+                            onClick={() => toggleExpandedRow(_row.id)}
+                            aria-label={isExpanded ? 'Tutup detail' : 'Buka detail'}
+                            className={`rounded-lg p-1 text-gray-400 transition-transform duration-200 hover:bg-gray-100 hover:text-gray-700 ${isExpanded ? 'rotate-180' : ''}`}
+                          >
+                            <DynamicIcon icon="ph:caret-down" fontSize="15px" />
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+
+                    {renderExpandedRow && (
+                      <tr>
+                        <td colSpan={_row.getAllCells().length + 1} className="p-0">
+                          <div
+                            className={`grid transition-[grid-template-rows,opacity] duration-200 ease-out ${isExpanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}
+                          >
+                            <div className="overflow-hidden">{renderExpandedRow(_row.original)}</div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>

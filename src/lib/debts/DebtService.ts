@@ -1,18 +1,29 @@
 import 'server-only';
 
-import { Prisma, type DebtStatus, type DebtType, type TransactionType } from '@prisma/client';
+import { Prisma, type AccountType, type DebtStatus, type DebtType, type TransactionType } from '@prisma/client';
 import { prisma } from '@/src/lib/Prisma';
-import { NotFoundError } from '@/src/lib/Errors';
+import { NotFoundError, ValidationError } from '@/src/lib/Errors';
 import { toAmount } from '@/src/helpers/MoneyHelper';
 import { toDateOnly } from '@/src/helpers/DateHelper';
 import { buildPage, decodeCursor, DEFAULT_PAGE_SIZE, encodeCursor, type Page } from '@/src/helpers/PaginationHelper';
-import type { DebtInput, DebtListParams, DebtPaymentInput } from './DebtValidator';
+import type { DebtInput, DebtListParams, DebtPaymentInput, DebtPaymentUpdateInput } from './DebtValidator';
+
+type DebtAccountDTO = {
+  uuid: string;
+  name: string;
+  type: AccountType;
+  color: string | null;
+  bankName: string | null;
+  accountNumber: string | null;
+};
 
 export type DebtPaymentDTO = {
   uuid: string;
   amount: number;
   paidAt: string;
   note: string | null;
+  isOpeningBalance: boolean;
+  account: DebtAccountDTO | null;
 };
 
 export type DebtDTO = {
@@ -26,8 +37,18 @@ export type DebtDTO = {
   dueDate: string | null;
   date: string | null;
   status: DebtStatus;
+  account: DebtAccountDTO | null;
   payments: DebtPaymentDTO[];
 };
+
+const debtAccountSelect = {
+  uuid: true,
+  name: true,
+  type: true,
+  color: true,
+  bankName: true,
+  accountNumber: true,
+} satisfies Prisma.AccountSelect;
 
 const debtSelect = {
   uuid: true,
@@ -38,97 +59,100 @@ const debtSelect = {
   dueDate: true,
   date: true,
   status: true,
+  transactions: {
+    where: { debtPaymentId: null },
+    select: { account: { select: debtAccountSelect } },
+    orderBy: { id: 'asc' },
+    take: 1,
+  },
   payments: {
-    select: { uuid: true, amount: true, paidAt: true, note: true },
-    orderBy: { paidAt: 'desc' },
+    select: {
+      uuid: true,
+      amount: true,
+      paidAt: true,
+      note: true,
+      isOpeningBalance: true,
+      transaction: { select: { account: { select: debtAccountSelect } } },
+    },
+    orderBy: [{ paidAt: 'desc' }, { id: 'desc' }],
   },
 } satisfies Prisma.DebtSelect;
 
 type DebtRow = Prisma.DebtGetPayload<{ select: typeof debtSelect }>;
 
-/**
- * Arah uang saat hutang atau piutang pertama dicatat. Arahnya berlawanan
- * dengan intuisi namanya: berhutang (PAYABLE) justru menambah saldo karena
- * uangnya diterima sekarang, sedangkan memberi piutang (RECEIVABLE) mengurangi
- * saldo karena uangnya dikeluarkan.
- */
 const DEBT_CREATE_TRANSACTION_TYPE: Record<DebtType, TransactionType> = {
   PAYABLE: 'INCOME',
   RECEIVABLE: 'EXPENSE',
 };
 
-/**
- * Arah uang saat hutang atau piutang dibayar, berkebalikan dari saat dicatat:
- * melunasi hutang mengurangi saldo, menerima pembayaran piutang menambahnya.
- * Dengan begitu satu siklus hutang penuh, dari dicatat sampai lunas, berjumlah
- * nol dan tidak terhitung dua kali.
- */
 const DEBT_PAYMENT_TRANSACTION_TYPE: Record<DebtType, TransactionType> = {
   PAYABLE: 'EXPENSE',
   RECEIVABLE: 'INCOME',
 };
 
-/**
- * Kategori bawaan dari `DEFAULT_CATEGORIES` yang dipakai transaksi otomatis
- * hutang dan piutang, supaya pencatatan otomatis tidak menambah kategori baru
- * di daftar milik pengguna.
- */
 const AUTO_CATEGORY_NAME: Record<TransactionType, string> = {
   EXPENSE: 'Tagihan',
   INCOME: 'Pemasukan Lain',
   TRANSFER: 'Transfer',
 };
 
-/**
- * Mencari kategori bawaan yang dipakai transaksi otomatis hutang dan piutang.
- * @param {Prisma.TransactionClient} transaction - Client Prisma milik transaksi berjalan.
- * @param {number} userId - ID pengguna pemilik kategori.
- * @param {TransactionType} type - Jenis transaksi otomatis yang akan dibuat.
- * @returns {Promise<number | null>} ID kategori bawaan, atau null bila pengguna sudah menghapusnya.
- */
+const DEBT_TRANSACTION_OPTIONS = { maxWait: 10_000, timeout: 20_000 } as const;
+
 async function resolveAutoCategoryId(transaction: Prisma.TransactionClient, userId: number, type: TransactionType): Promise<number | null> {
   const category = await transaction.category.findFirst({
     where: { userId, type, name: AUTO_CATEGORY_NAME[type] },
     select: { id: true },
   });
-
   return category?.id ?? null;
 }
 
-/**
- * Menyusun catatan transaksi otomatis saat hutang atau piutang pertama dicatat,
- * sehingga transaksi tersebut tetap dapat dikenali di daftar transaksi.
- * @param {DebtType} type - Jenis catatan, PAYABLE atau RECEIVABLE.
- * @param {string} party - Nama pihak lawan hutang atau piutang.
- * @param {string | null} note - Catatan tambahan dari pengguna, opsional.
- * @returns {string} Catatan transaksi otomatis yang siap disimpan.
- */
+async function resolveAccountId(transaction: Prisma.TransactionClient, userId: number, accountUuid: string): Promise<number> {
+  const account = await transaction.account.findFirst({
+    where: { uuid: accountUuid, userId, isActive: true },
+    select: { id: true },
+  });
+  if (!account) throw new NotFoundError('Akun pembayaran tidak ditemukan atau sudah tidak aktif.');
+  return account.id;
+}
+
+type AccountMovement = {
+  accountId: number | null;
+  type: TransactionType;
+  amount: Prisma.Decimal;
+  reverse?: boolean;
+};
+
+/** Menggabungkan lalu menerapkan mutasi saldo akun dari transaksi hutang. */
+async function applyAccountMovements(transaction: Prisma.TransactionClient, movements: AccountMovement[]) {
+  const totals = new Map<number, Prisma.Decimal>();
+
+  for (const movement of movements) {
+    if (!movement.accountId) continue;
+    const direction = movement.type === 'INCOME' ? 1 : -1;
+    const signedAmount = movement.amount.mul(movement.reverse ? -direction : direction);
+    totals.set(movement.accountId, (totals.get(movement.accountId) ?? new Prisma.Decimal(0)).plus(signedAmount));
+  }
+
+  for (const accountId of [...totals.keys()].sort((_left, _right) => _left - _right)) {
+    const delta = totals.get(accountId);
+    if (!delta || delta.isZero()) continue;
+    await transaction.account.update({ where: { id: accountId }, data: { balance: { increment: delta } } });
+  }
+}
+
 function buildAutoTransactionNote(type: DebtType, party: string, note?: string | null) {
   const label = type === 'PAYABLE' ? 'Berhutang ke' : 'Piutang dari';
   const trimmedNote = note?.trim();
-
   return trimmedNote ? `${label} ${party} - ${trimmedNote}` : `${label} ${party}`;
 }
 
-/**
- * Membongkar cursor daftar hutang yang hanya berisi satu kolom `id`.
- * @param {string} cursor - Cursor halaman sebelumnya, opsional.
- * @returns {number | null} ID baris terakhir halaman sebelumnya, atau null bila cursor kosong atau rusak.
- */
 function decodeCursorId(cursor?: string): number | null {
   const parts = decodeCursor(cursor);
   if (!parts || parts.length !== 1) return null;
-
   const id = Number(parts[0]);
   return Number.isNaN(id) ? null : id;
 }
 
-/**
- * Mengubah baris hutang dari database menjadi DTO, sekaligus menjumlahkan
- * pembayaran yang sudah masuk untuk menghitung sisa tagihannya.
- * @param {DebtRow} row - Baris hutang beserta pembayarannya hasil kueri Prisma.
- * @returns {DebtDTO} Hutang dalam bentuk yang aman dikirim ke klien.
- */
 function toDTO(row: DebtRow): DebtDTO {
   const amount = toAmount(row.amount);
   const paidAmount = row.payments.reduce((_total, _payment) => _total + toAmount(_payment.amount), 0);
@@ -144,130 +168,118 @@ function toDTO(row: DebtRow): DebtDTO {
     dueDate: row.dueDate ? row.dueDate.toISOString().slice(0, 10) : null,
     date: row.date ? row.date.toISOString().slice(0, 10) : null,
     status: row.status,
+    account: row.transactions[0]?.account ?? null,
     payments: row.payments.map(_payment => ({
       uuid: _payment.uuid,
       amount: toAmount(_payment.amount),
       paidAt: _payment.paidAt.toISOString().slice(0, 10),
       note: _payment.note,
+      isOpeningBalance: _payment.isOpeningBalance,
+      account: _payment.transaction?.account ?? null,
     })),
   };
 }
 
-/**
- * Operasi baca dan tulis hutang serta piutang pengguna. Pencatatan dan
- * pembayaran selalu dijalankan bersama transaksi otomatisnya dalam satu
- * transaksi database, supaya catatan dan mutasi kasnya tidak pernah terpisah.
- */
+async function syncDebtStatus(transaction: Prisma.TransactionClient, debtId: number, debtAmount: Prisma.Decimal): Promise<DebtRow> {
+  const totals = await transaction.debtPayment.aggregate({ where: { debtId }, _sum: { amount: true } });
+  const isSettled = (totals._sum.amount ?? new Prisma.Decimal(0)).gte(debtAmount);
+
+  return transaction.debt.update({
+    where: { id: debtId },
+    data: { status: isSettled ? 'PAID' : 'OPEN', settledAt: isSettled ? new Date() : null },
+    select: debtSelect,
+  });
+}
+
+function assertPaymentTotal(nextTotal: Prisma.Decimal, debtAmount: Prisma.Decimal, currentTotal?: Prisma.Decimal) {
+  if (nextTotal.gt(debtAmount) && (!currentTotal || nextTotal.gt(currentTotal))) {
+    throw new ValidationError({ amount: ['Total pembayaran tidak boleh melebihi nilai hutang/piutang.'] });
+  }
+}
+
 class DebtService {
-  /**
-   * Mengambil satu halaman hutang dan piutang milik pengguna. Daftar diurutkan
-   * murni `id desc` supaya cursor cukup satu kolom; mengurutkan per status atau
-   * jatuh tempo akan membuat keyset butuh perbandingan majemuk.
-   * @param {number} userId - ID pengguna pemilik catatan.
-   * @param {DebtListParams} params - Filter tipe, status, pencarian, cursor, dan limit.
-   * @returns {Promise<Page<DebtDTO>>} Catatan halaman ini beserta cursor halaman berikutnya.
-   */
   async list(userId: number, params: DebtListParams = {}): Promise<Page<DebtDTO>> {
     const limit = params.limit ?? DEFAULT_PAGE_SIZE;
     const cursorId = decodeCursorId(params.cursor);
-
     const rows = await prisma.debt.findMany({
       where: {
         userId,
         ...(params.type ? { type: params.type } : {}),
         ...(params.status ? { status: params.status } : {}),
-        ...(params.q
-          ? {
-              OR: [{ party: { contains: params.q, mode: 'insensitive' } }, { note: { contains: params.q, mode: 'insensitive' } }],
-            }
-          : {}),
+        ...(params.q ? { OR: [{ party: { contains: params.q, mode: 'insensitive' } }, { note: { contains: params.q, mode: 'insensitive' } }] } : {}),
         ...(cursorId === null ? {} : { id: { lt: cursorId } }),
       },
       select: { ...debtSelect, id: true },
       orderBy: { id: 'desc' },
       take: limit + 1,
     });
-
     return buildPage(rows, limit, toDTO, _row => encodeCursor([_row.id]));
   }
 
-  /**
-   * Mencatat hutang atau piutang baru sekaligus transaksi otomatisnya dalam
-   * satu transaksi database: berhutang berarti uang masuk, memberi piutang
-   * berarti uang keluar, sesuai `DEBT_CREATE_TRANSACTION_TYPE`. Kolom `id`
-   * hutang ikut diambil karena dibutuhkan untuk menautkan transaksi otomatis.
-   * @param {number} userId - ID pengguna pemilik catatan.
-   * @param {DebtInput} input - Data hutang atau piutang yang sudah tervalidasi.
-   * @param {DebtType} input.type - Jenis catatan, PAYABLE atau RECEIVABLE.
-   * @param {string} input.party - Nama pihak lawan hutang atau piutang.
-   * @param {number} input.amount - Nilai pokok hutang atau piutang.
-   * @param {string} input.date - Tanggal pencatatan dalam format `YYYY-MM-DD`.
-   * @returns {Promise<DebtDTO>} Catatan hutang atau piutang yang baru dibuat.
-   */
   async create(userId: number, input: DebtInput): Promise<DebtDTO> {
+    const amount = new Prisma.Decimal(input.amount);
+    const initialPaidAmount = new Prisma.Decimal(input.initialPaidAmount);
     const transactionType = DEBT_CREATE_TRANSACTION_TYPE[input.type];
 
     const row = await prisma.$transaction(async transaction => {
+      const accountId = await resolveAccountId(transaction, userId, input.accountUuid);
       const debt = await transaction.debt.create({
         data: {
           userId,
           type: input.type,
           party: input.party,
-          amount: new Prisma.Decimal(input.amount),
+          amount,
           note: input.note?.trim() || null,
           date: toDateOnly(input.date),
           dueDate: input.dueDate ? toDateOnly(input.dueDate) : null,
         },
-        select: { ...debtSelect, id: true },
+        select: { id: true },
       });
 
-      const categoryId = await resolveAutoCategoryId(transaction, userId, transactionType);
+      if (initialPaidAmount.gt(0)) {
+        await transaction.debtPayment.create({
+          data: {
+            debtId: debt.id,
+            amount: initialPaidAmount,
+            paidAt: toDateOnly(input.date),
+            note: 'Saldo awal pembayaran',
+            isOpeningBalance: true,
+          },
+        });
+      }
 
+      const categoryId = await resolveAutoCategoryId(transaction, userId, transactionType);
       await transaction.transaction.create({
         data: {
           userId,
           categoryId,
           debtId: debt.id,
+          accountId,
           type: transactionType,
-          amount: new Prisma.Decimal(input.amount),
+          amount,
           note: buildAutoTransactionNote(input.type, input.party, input.note),
           occurredAt: toDateOnly(input.date),
         },
       });
-
-      return debt;
-    });
-
+      await applyAccountMovements(transaction, [{ accountId, type: transactionType, amount }]);
+      return syncDebtStatus(transaction, debt.id, amount);
+    }, DEBT_TRANSACTION_OPTIONS);
     return toDTO(row);
   }
 
-  /**
-   * Mencatat satu pembayaran hutang atau piutang. Pembayaran, transaksi
-   * otomatisnya, dan pemutakhiran status dijalankan atomik: tanpa itu dua
-   * pembayaran bersamaan dapat membuat hutang lunas tetapi statusnya tetap
-   * OPEN, atau transaksinya tercatat tanpa pembayarannya.
-   * @param {number} userId - ID pengguna pemilik catatan.
-   * @param {string} uuid - UUID hutang atau piutang yang dibayar.
-   * @param {DebtPaymentInput} input - Data pembayaran yang sudah tervalidasi.
-   * @param {number} input.amount - Nilai pembayaran.
-   * @param {string} input.paidAt - Tanggal pembayaran dalam format `YYYY-MM-DD`.
-   * @returns {Promise<DebtDTO>} Catatan hutang atau piutang setelah pembayaran masuk.
-   * @throws {NotFoundError} Jika catatan tidak ada atau bukan milik pengguna tersebut.
-   */
   async addPayment(userId: number, uuid: string, input: DebtPaymentInput): Promise<DebtDTO> {
     const debt = await this.mustOwn(userId, uuid);
+    const amount = new Prisma.Decimal(input.amount);
     const transactionType = DEBT_PAYMENT_TRANSACTION_TYPE[debt.type];
 
     const row = await prisma.$transaction(async transaction => {
-      await transaction.debtPayment.create({
-        data: {
-          debtId: debt.id,
-          amount: new Prisma.Decimal(input.amount),
-          paidAt: toDateOnly(input.paidAt),
-          note: input.note?.trim() || null,
-        },
+      const totals = await transaction.debtPayment.aggregate({ where: { debtId: debt.id }, _sum: { amount: true } });
+      assertPaymentTotal((totals._sum.amount ?? new Prisma.Decimal(0)).plus(amount), debt.amount);
+      const accountId = await resolveAccountId(transaction, userId, input.accountUuid);
+      const payment = await transaction.debtPayment.create({
+        data: { debtId: debt.id, amount, paidAt: toDateOnly(input.paidAt), note: input.note?.trim() || null },
+        select: { id: true },
       });
-
       const categoryId = await resolveAutoCategoryId(transaction, userId, transactionType);
 
       await transaction.transaction.create({
@@ -275,63 +287,117 @@ class DebtService {
           userId,
           categoryId,
           debtId: debt.id,
+          debtPaymentId: payment.id,
+          accountId,
           type: transactionType,
-          amount: new Prisma.Decimal(input.amount),
+          amount,
           note: input.note?.trim() || null,
           occurredAt: toDateOnly(input.paidAt),
         },
       });
-
-      const totals = await transaction.debtPayment.aggregate({
-        where: { debtId: debt.id },
-        _sum: { amount: true },
-      });
-
-      const paidAmount = toAmount(totals._sum.amount);
-      const isSettled = paidAmount >= toAmount(debt.amount);
-
-      return transaction.debt.update({
-        where: { id: debt.id },
-        data: {
-          status: isSettled ? 'PAID' : 'OPEN',
-          settledAt: isSettled ? new Date() : null,
-        },
-        select: debtSelect,
-      });
-    });
-
+      await applyAccountMovements(transaction, [{ accountId, type: transactionType, amount }]);
+      return syncDebtStatus(transaction, debt.id, debt.amount);
+    }, DEBT_TRANSACTION_OPTIONS);
     return toDTO(row);
   }
 
-  /**
-   * Menghapus catatan hutang atau piutang milik pengguna.
-   * @param {number} userId - ID pengguna pemilik catatan.
-   * @param {string} uuid - UUID catatan yang dihapus.
-   * @returns {Promise<void>} Selesai setelah catatan terhapus.
-   * @throws {NotFoundError} Jika catatan tidak ada atau bukan milik pengguna tersebut.
-   */
-  async remove(userId: number, uuid: string): Promise<void> {
-    const debt = await this.mustOwn(userId, uuid);
-    await prisma.debt.delete({ where: { id: debt.id } });
+  async updatePayment(userId: number, debtUuid: string, paymentUuid: string, input: DebtPaymentUpdateInput): Promise<DebtDTO> {
+    const payment = await this.mustOwnPayment(userId, debtUuid, paymentUuid);
+    const amount = new Prisma.Decimal(input.amount);
+    const transactionType = DEBT_PAYMENT_TRANSACTION_TYPE[payment.debt.type];
+
+    const row = await prisma.$transaction(async transaction => {
+      const totals = await transaction.debtPayment.aggregate({ where: { debtId: payment.debt.id }, _sum: { amount: true } });
+      const currentTotal = totals._sum.amount ?? new Prisma.Decimal(0);
+      assertPaymentTotal(currentTotal.minus(payment.amount).plus(amount), payment.debt.amount, currentTotal);
+
+      await transaction.debtPayment.update({
+        where: { id: payment.id },
+        data: { amount, paidAt: toDateOnly(input.paidAt), note: input.note?.trim() || null },
+      });
+
+      if (!payment.isOpeningBalance) {
+        if (!input.accountUuid) throw new ValidationError({ accountUuid: ['Akun pembayaran wajib dipilih.'] });
+        const accountId = await resolveAccountId(transaction, userId, input.accountUuid);
+        const categoryId = await resolveAutoCategoryId(transaction, userId, transactionType);
+
+        if (payment.transaction) {
+          await transaction.transaction.update({
+            where: { id: payment.transaction.id },
+            data: { categoryId, accountId, type: transactionType, amount, note: input.note?.trim() || null, occurredAt: toDateOnly(input.paidAt) },
+          });
+          await applyAccountMovements(transaction, [
+            { accountId: payment.transaction.accountId, type: payment.transaction.type, amount: payment.transaction.amount, reverse: true },
+            { accountId, type: transactionType, amount },
+          ]);
+        } else {
+          await transaction.transaction.create({
+            data: {
+              userId,
+              categoryId,
+              debtId: payment.debt.id,
+              debtPaymentId: payment.id,
+              accountId,
+              type: transactionType,
+              amount,
+              note: input.note?.trim() || null,
+              occurredAt: toDateOnly(input.paidAt),
+            },
+          });
+          await applyAccountMovements(transaction, [{ accountId, type: transactionType, amount }]);
+        }
+      }
+
+      return syncDebtStatus(transaction, payment.debt.id, payment.debt.amount);
+    }, DEBT_TRANSACTION_OPTIONS);
+    return toDTO(row);
   }
 
-  /**
-   * Memastikan sebuah catatan hutang benar-benar milik pengguna sebelum diubah,
-   * sekaligus mengambil kolom yang dibutuhkan operasi pembayaran.
-   * @param {number} userId - ID pengguna pemilik catatan.
-   * @param {string} uuid - UUID catatan yang diperiksa.
-   * @returns {Promise<{ id: number; amount: Prisma.Decimal; type: DebtType }>} ID internal, nilai pokok, dan jenis catatan.
-   * @throws {NotFoundError} Jika catatan tidak ada atau bukan milik pengguna tersebut.
-   */
+  async removePayment(userId: number, debtUuid: string, paymentUuid: string): Promise<DebtDTO> {
+    const payment = await this.mustOwnPayment(userId, debtUuid, paymentUuid);
+
+    const row = await prisma.$transaction(async transaction => {
+      if (payment.transaction) {
+        await applyAccountMovements(transaction, [{ accountId: payment.transaction.accountId, type: payment.transaction.type, amount: payment.transaction.amount, reverse: true }]);
+      }
+      await transaction.debtPayment.delete({ where: { id: payment.id } });
+      return syncDebtStatus(transaction, payment.debt.id, payment.debt.amount);
+    }, DEBT_TRANSACTION_OPTIONS);
+    return toDTO(row);
+  }
+
+  async remove(userId: number, uuid: string): Promise<void> {
+    const debt = await this.mustOwn(userId, uuid);
+
+    await prisma.$transaction(async transaction => {
+      const rows = await transaction.transaction.findMany({ where: { debtId: debt.id }, select: { accountId: true, type: true, amount: true } });
+      await applyAccountMovements(
+        transaction,
+        rows.map(_row => ({ ..._row, reverse: true })),
+      );
+      await transaction.debt.delete({ where: { id: debt.id } });
+    }, DEBT_TRANSACTION_OPTIONS);
+  }
+
   private async mustOwn(userId: number, uuid: string) {
-    const debt = await prisma.debt.findFirst({
-      where: { uuid, userId },
-      select: { id: true, amount: true, type: true },
-    });
-
+    const debt = await prisma.debt.findFirst({ where: { uuid, userId }, select: { id: true, amount: true, type: true } });
     if (!debt) throw new NotFoundError('Data hutang/piutang tidak ditemukan.');
-
     return debt;
+  }
+
+  private async mustOwnPayment(userId: number, debtUuid: string, paymentUuid: string) {
+    const payment = await prisma.debtPayment.findFirst({
+      where: { uuid: paymentUuid, debt: { uuid: debtUuid, userId } },
+      select: {
+        id: true,
+        amount: true,
+        isOpeningBalance: true,
+        debt: { select: { id: true, amount: true, type: true } },
+        transaction: { select: { id: true, accountId: true, type: true, amount: true } },
+      },
+    });
+    if (!payment) throw new NotFoundError('Riwayat pembayaran tidak ditemukan.');
+    return payment;
   }
 }
 

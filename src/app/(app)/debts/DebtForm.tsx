@@ -3,13 +3,15 @@
 import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/src/components/ui/Button';
-import { Input, MoneyInput } from '@/src/components/ui/Field';
+import { Input, MoneyInput, Select } from '@/src/components/ui/Field';
 import { ErrorAlert } from '@/src/components/ui/Alert';
 import { Sheet } from '@/src/components/ui/Sheet';
 import { AddButton } from '@/src/components/ui/AddButton';
 import { useApiMutation } from '@/src/hooks/useApiMutation';
 import { debtApi } from '@/src/lib/debts/DebtApi';
 import { toDateInputValue } from '@/src/helpers/DateHelper';
+import { toAccountSelectOptions } from '@/src/lib/accounts/AccountSelectOptions';
+import type { AccountDTO } from '@/src/lib/accounts/AccountService';
 
 type DebtType = 'RECEIVABLE' | 'PAYABLE';
 
@@ -18,18 +20,22 @@ const DEBT_TYPE_OPTIONS: ReadonlyArray<{ value: DebtType; label: string }> = [
   { value: 'RECEIVABLE', label: 'Saya Piutang' },
 ];
 
+type DebtFormOwnProps = { accounts: AccountDTO[] };
+
 /**
  * Form pencatatan hutang atau piutang baru dalam bentuk panel yang dipicu
  * tombol tambah. Setelah tersimpan, halaman disegarkan agar kartu ringkasan
  * yang dirender di server ikut memperbarui angkanya.
  * @returns {ReactNode} Tombol tambah beserta panel form hutang dan piutangnya.
  */
-export default function DebtForm() {
+export default function DebtForm({ accounts }: DebtFormOwnProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [type, setType] = useState<DebtType>('PAYABLE');
   const [party, setParty] = useState('');
   const [amount, setAmount] = useState('');
+  const [initialPaidAmount, setInitialPaidAmount] = useState('');
+  const [accountUuid, setAccountUuid] = useState(accounts[0]?.uuid ?? '');
   const [date, setDate] = useState(() => toDateInputValue(new Date()));
   const [dueDate, setDueDate] = useState('');
   const [note, setNote] = useState('');
@@ -48,6 +54,8 @@ export default function DebtForm() {
       type,
       party,
       amount: Number(amount),
+      initialPaidAmount: Number(initialPaidAmount || 0),
+      accountUuid,
       date,
       dueDate: dueDate || null,
       note: note || null,
@@ -57,6 +65,7 @@ export default function DebtForm() {
 
     setParty('');
     setAmount('');
+    setInitialPaidAmount('');
     setDate(toDateInputValue(new Date()));
     setDueDate('');
     setNote('');
@@ -96,6 +105,26 @@ export default function DebtForm() {
           />
 
           <MoneyInput label="Jumlah" required placeholder="0" value={amount} onValueChange={setAmount} errors={fieldErrors.amount} />
+
+          <MoneyInput
+            label="Sudah Terbayar Sebelumnya"
+            placeholder="0"
+            value={initialPaidAmount}
+            onValueChange={setInitialPaidAmount}
+            errors={fieldErrors.initialPaidAmount}
+            hint="Saldo awal riwayat pembayaran; tidak membuat transaksi pembayaran baru."
+          />
+
+          <Select
+            label={type === 'PAYABLE' ? 'Akun Penerima Hutang' : 'Akun Sumber Piutang'}
+            value={accountUuid}
+            onChange={setAccountUuid}
+            options={toAccountSelectOptions(accounts)}
+            placeholder="Pilih akun"
+            searchPlaceholder="Cari akun..."
+            errors={fieldErrors.accountUuid}
+            hint={type === 'PAYABLE' ? 'Nilai pokok masuk ke akun ini.' : 'Nilai pokok keluar dari akun ini.'}
+          />
 
           <Input label="Tanggal" type="date" required value={date} onChange={event => setDate(event.target.value)} errors={fieldErrors.date} />
 
