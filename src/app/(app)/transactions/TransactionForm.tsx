@@ -74,6 +74,7 @@ export default function TransactionForm({ categories, accounts, editingUuid, ini
   });
 
   const isTransfer = form.type === 'TRANSFER';
+  const transferCategory = useMemo(() => categories.find(_category => _category.type === 'TRANSFER'), [categories]);
   const visibleCategories = useMemo(() => categories.filter(_category => _category.type === form.type), [categories, form.type]);
   const sourceOptions = useMemo(() => toAccountOptions(accounts), [accounts]);
   const destinationOptions = useMemo(() => toAccountOptions(accounts.filter(_account => _account.uuid !== form.accountUuid)), [accounts, form.accountUuid]);
@@ -90,7 +91,7 @@ export default function TransactionForm({ categories, accounts, editingUuid, ini
     setForm(_previous => ({
       ..._previous,
       type,
-      categoryUuid: null,
+      categoryUuid: type === 'TRANSFER' ? (transferCategory?.uuid ?? null) : null,
       toAccountUuid: type === 'TRANSFER' ? _previous.toAccountUuid : null,
     }));
   }
@@ -133,11 +134,13 @@ export default function TransactionForm({ categories, accounts, editingUuid, ini
 
         <Select
           label="Kategori"
-          value={form.categoryUuid ?? ''}
+          value={isTransfer ? (transferCategory?.uuid ?? '') : (form.categoryUuid ?? '')}
           onChange={value => setForm(_previous => ({ ..._previous, categoryUuid: value }))}
           errors={fieldErrors.categoryUuid}
-          placeholder="Tanpa kategori"
+          placeholder={isTransfer ? 'Transfer' : 'Tanpa kategori'}
           searchPlaceholder="Cari kategori..."
+          disabled={isTransfer}
+          hint={isTransfer ? 'Kategori sistem ditetapkan otomatis untuk transaksi transfer.' : undefined}
           options={visibleCategories.map(_category => ({
             value: _category.uuid,
             label: _category.name,

@@ -15,6 +15,13 @@ export type CategoryDTO = {
 
 export type CategoryUsageDTO = CategoryDTO & { transactionCount: number };
 
+export const TRANSFER_CATEGORY = {
+  name: 'Transfer',
+  type: 'TRANSFER',
+  icon: 'ph:arrows-left-right',
+  color: '#A3C7E8',
+} as const satisfies Pick<CategoryDTO, 'name' | 'type' | 'icon' | 'color'>;
+
 /**
  * Kategori bawaan yang disemai saat pengguna mendaftar, supaya aplikasi
  * langsung dapat dipakai mencatat tanpa menyiapkan kategori satu per satu.
@@ -29,6 +36,7 @@ export const DEFAULT_CATEGORIES: ReadonlyArray<Pick<CategoryDTO, 'name' | 'type'
   { name: 'Tagihan', type: 'EXPENSE', icon: 'ph:receipt', color: '#C9B6E4' },
   { name: 'Hiburan', type: 'EXPENSE', icon: 'ph:game-controller', color: '#9AD0EC' },
   { name: 'Pengeluaran Lain', type: 'EXPENSE', icon: 'ph:dots-three-circle', color: '#D0D0D0' },
+  TRANSFER_CATEGORY,
 ];
 
 const categorySelect = {
@@ -127,6 +135,9 @@ class CategoryService {
    */
   async update(userId: number, uuid: string, input: CategoryInput): Promise<CategoryDTO> {
     const category = await this.mustOwn(userId, uuid);
+    if (category.type === 'TRANSFER') {
+      throw new ConflictError('Kategori Transfer adalah kategori sistem dan tidak dapat diubah.');
+    }
 
     try {
       return await prisma.category.update({
@@ -150,6 +161,10 @@ class CategoryService {
    */
   async remove(userId: number, uuid: string): Promise<void> {
     const category = await this.mustOwn(userId, uuid);
+    if (category.type === 'TRANSFER') {
+      throw new ConflictError('Kategori Transfer adalah kategori sistem dan tidak dapat dihapus.');
+    }
+
     await prisma.category.delete({ where: { id: category.id } });
   }
 
@@ -177,7 +192,7 @@ class CategoryService {
   private async mustOwn(userId: number, uuid: string) {
     const category = await prisma.category.findFirst({
       where: { uuid, userId },
-      select: { id: true },
+      select: { id: true, type: true },
     });
 
     if (!category) throw new NotFoundError('Kategori tidak ditemukan.');

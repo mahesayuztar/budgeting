@@ -6,6 +6,7 @@ import { NotFoundError } from '@/src/lib/Errors';
 import { toAmount } from '@/src/helpers/MoneyHelper';
 import { monthRange, toDateOnly, yearRange } from '@/src/helpers/DateHelper';
 import { buildPage, decodeCursor, DEFAULT_PAGE_SIZE, encodeCursor, type Page } from '@/src/helpers/PaginationHelper';
+import { TRANSFER_CATEGORY } from '@/src/lib/categories/CategoryService';
 import type { TransactionInput, TransactionListParams } from './TransactionValidator';
 
 export type TransactionDTO = {
@@ -121,6 +122,38 @@ async function resolveCategoryId(userId: number, categoryUuid?: string | null) {
   });
 
   if (!category) throw new NotFoundError('Kategori tidak ditemukan.');
+
+  return category.id;
+}
+
+/**
+ * Menentukan kategori transaksi. Transfer selalu memakai kategori sistem
+ * `Transfer`, sehingga categoryUuid dari klien sengaja diabaikan. Upsert juga
+ * memulihkan kategori sistem secara otomatis bila data lama belum mendapat
+ * seeder atau pernah dimanipulasi langsung di database.
+ * @param {number} userId - ID pengguna pemilik transaksi.
+ * @param {TransactionType} type - Jenis transaksi yang akan disimpan.
+ * @param {string | null} categoryUuid - UUID kategori pilihan klien untuk transaksi non-transfer.
+ * @returns {Promise<number | null>} ID internal kategori yang harus dipakai.
+ */
+async function resolveTransactionCategoryId(userId: number, type: TransactionType, categoryUuid?: string | null) {
+  if (type !== 'TRANSFER') return resolveCategoryId(userId, categoryUuid);
+
+  const category = await prisma.category.upsert({
+    where: {
+      userId_name_type: {
+        userId,
+        name: TRANSFER_CATEGORY.name,
+        type: TRANSFER_CATEGORY.type,
+      },
+    },
+    create: { userId, ...TRANSFER_CATEGORY },
+    update: {
+      icon: TRANSFER_CATEGORY.icon,
+      color: TRANSFER_CATEGORY.color,
+    },
+    select: { id: true },
+  });
 
   return category.id;
 }
@@ -316,7 +349,7 @@ class TransactionService {
    * @throws {NotFoundError} Jika kategori atau akun tidak ada atau bukan milik pengguna tersebut.
    */
   async create(userId: number, input: TransactionInput): Promise<TransactionDTO> {
-    const categoryId = await resolveCategoryId(userId, input.categoryUuid);
+    const categoryId = await resolveTransactionCategoryId(userId, input.type, input.categoryUuid);
     const accountId = await resolveAccountId(userId, input.accountUuid);
     const toAccountId = input.type === 'TRANSFER' ? await resolveAccountId(userId, input.toAccountUuid) : null;
     const amount = new Prisma.Decimal(input.amount);
@@ -361,7 +394,7 @@ class TransactionService {
    */
   async update(userId: number, uuid: string, input: TransactionInput): Promise<TransactionDTO> {
     const previous = await this.mustOwn(userId, uuid);
-    const categoryId = await resolveCategoryId(userId, input.categoryUuid);
+    const categoryId = await resolveTransactionCategoryId(userId, input.type, input.categoryUuid);
     const accountId = await resolveAccountId(userId, input.accountUuid);
     const toAccountId = input.type === 'TRANSFER' ? await resolveAccountId(userId, input.toAccountUuid) : null;
     const amount = new Prisma.Decimal(input.amount);

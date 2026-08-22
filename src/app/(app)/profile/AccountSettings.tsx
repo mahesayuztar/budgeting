@@ -12,7 +12,7 @@ import { ConfirmModal } from '@/src/components/ui/ConfirmModal';
 import { useApiMutation } from '@/src/hooks/useApiMutation';
 import { formatIDR } from '@/src/helpers/MoneyHelper';
 import { accountApi } from '@/src/lib/accounts/AccountApi';
-import { ENTITY_COLORS } from '@/src/lib/ThemeConstants';
+import { ENTITY_COLORS, ENTITY_COLOR_OPTIONS } from '@/src/lib/ThemeConstants';
 import type { AccountUsageDTO } from '@/src/lib/accounts/AccountService';
 import type { AccountInput } from '@/src/lib/accounts/AccountValidator';
 
@@ -323,15 +323,18 @@ export default function AccountSettings({ accounts }: AccountSettingsOwnProps) {
             <label className="text-sm font-semibold text-gray-700">Warna</label>
 
             <div className="flex flex-wrap gap-2">
-              {ENTITY_COLORS.map(_color => (
+              {ENTITY_COLOR_OPTIONS.map(_option => (
                 <button
-                  key={`account_settings__color_${_color}`}
+                  key={`account_settings__color_${_option.value}`}
                   type="button"
-                  onClick={() => setForm(_previous => ({ ..._previous, color: _color }))}
-                  aria-label={`Warna ${_color}`}
-                  aria-pressed={form.color === _color}
-                  style={{ backgroundColor: _color }}
-                  className={`h-9 w-9 rounded-full transition-transform ${form.color === _color ? 'ring-2 ring-gray-800 ring-offset-2' : 'hover:scale-105'}`}
+                  onClick={() => setForm(_previous => ({ ..._previous, color: _option.value }))}
+                  aria-label={`Pilih warna ${_option.label}`}
+                  aria-pressed={form.color === _option.value}
+                  title={_option.label}
+                  style={{ backgroundColor: _option.value }}
+                  className={`h-9 w-9 rounded-full border border-black/5 transition-transform ${
+                    form.color === _option.value ? 'ring-2 ring-gray-800 ring-offset-2' : 'hover:scale-105'
+                  }`}
                 />
               ))}
             </div>
