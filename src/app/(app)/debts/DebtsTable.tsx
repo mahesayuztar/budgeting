@@ -39,6 +39,14 @@ function getPaidProgress(debt: DebtDTO) {
   return debt.amount > 0 ? Math.min(debt.paidAmount / debt.amount, 1) : 0;
 }
 
+function DebtStatusBadge({ status }: { status: DebtDTO['status'] }) {
+  return (
+    <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-bold ${status === 'PAID' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+      {status === 'PAID' ? 'Lunas' : 'Berjalan'}
+    </span>
+  );
+}
+
 function PaymentSheet({ debt, accounts, payment, onClose, onSaved }: PaymentSheetOwnProps) {
   const isOpeningBalance = payment?.isOpeningBalance ?? false;
   const [amount, setAmount] = useState(payment ? String(payment.amount) : '');
@@ -104,7 +112,6 @@ function PaymentSheet({ debt, accounts, payment, onClose, onSaved }: PaymentShee
 function PaymentHistory({ debt, accounts, onDone }: { debt: DebtDTO; accounts: AccountDTO[]; onDone: () => void }) {
   const [editing, setEditing] = useState<DebtPaymentDTO | null>(null);
   const [deleting, setDeleting] = useState<DebtPaymentDTO | null>(null);
-  const [actionPayment, setActionPayment] = useState<DebtPaymentDTO | null>(null);
   const removal = useApiMutation((paymentUuid: string) => debtApi.removePayment(debt.uuid, paymentUuid), {
     invalidateKeys: [['debts']],
     updateCache: syncSavedDebtToCache,
@@ -127,10 +134,6 @@ function PaymentHistory({ debt, accounts, onDone }: { debt: DebtDTO; accounts: A
         <span className="shrink-0 text-right text-[11px] font-semibold text-gray-500 sm:text-xs">
           Total <Money value={debt.paidAmount} />
         </span>
-      </div>
-
-      <div className="mb-3 sm:hidden">
-        <RowActions debt={debt} accounts={accounts} onDone={onDone} expanded />
       </div>
 
       {debt.payments.length === 0 ? (
@@ -159,15 +162,7 @@ function PaymentHistory({ debt, accounts, onDone }: { debt: DebtDTO; accounts: A
                   {_payment.note && _payment.note !== 'Saldo awal pembayaran' ? ` · ${_payment.note}` : ''}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => setActionPayment(_payment)}
-                aria-label="Aksi pembayaran"
-                className="shrink-0 rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 sm:hidden"
-              >
-                <DynamicIcon icon="ph:dots-three-vertical" fontSize="17px" />
-              </button>
-              <div className="hidden shrink-0 items-center sm:flex">
+              <div className="flex shrink-0 items-center">
                 <button
                   type="button"
                   onClick={() => setEditing(_payment)}
@@ -191,42 +186,6 @@ function PaymentHistory({ debt, accounts, onDone }: { debt: DebtDTO; accounts: A
       )}
 
       {editing && <PaymentSheet debt={debt} accounts={accounts} payment={editing} onClose={() => setEditing(null)} onSaved={onDone} />}
-      {actionPayment && (
-        <Sheet open title="Aksi Pembayaran" onClose={() => setActionPayment(null)}>
-          <div className="flex flex-col gap-3">
-            <div className="rounded-xl bg-gray-50 px-4 py-3">
-              <p className="text-sm font-bold text-gray-800">
-                <Money value={actionPayment.amount} />
-              </p>
-              <p className="mt-0.5 text-xs text-gray-400">
-                {formatDateID(actionPayment.paidAt)} · {actionPayment.isOpeningBalance ? 'Saldo awal' : (actionPayment.account?.name ?? 'Tanpa akun')}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                setEditing(actionPayment);
-                setActionPayment(null);
-              }}
-              className="inline-flex w-full items-center gap-3 rounded-xl border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-700"
-            >
-              <DynamicIcon icon="ph:pencil-simple" fontSize="17px" />
-              Ubah pembayaran
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setDeleting(actionPayment);
-                setActionPayment(null);
-              }}
-              className="inline-flex w-full items-center gap-3 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-left text-sm font-semibold text-red-600"
-            >
-              <DynamicIcon icon="ph:trash" fontSize="17px" />
-              Hapus pembayaran
-            </button>
-          </div>
-        </Sheet>
-      )}
       <ConfirmModal
         open={Boolean(deleting)}
         icon="ph:trash"
@@ -241,7 +200,7 @@ function PaymentHistory({ debt, accounts, onDone }: { debt: DebtDTO; accounts: A
   );
 }
 
-function RowActions({ debt, accounts, onDone, expanded = false }: { debt: DebtDTO; accounts: AccountDTO[]; onDone: () => void; expanded?: boolean }) {
+function RowActions({ debt, accounts, onDone }: { debt: DebtDTO; accounts: AccountDTO[]; onDone: () => void }) {
   const [addingPayment, setAddingPayment] = useState(false);
   const [confirmingRemoval, setConfirmingRemoval] = useState(false);
   const removal = useApiMutation(debtApi.remove, { invalidateKeys: [['debts']] });
@@ -253,20 +212,15 @@ function RowActions({ debt, accounts, onDone, expanded = false }: { debt: DebtDT
   }
 
   return (
-    <div className={`flex items-center gap-2 ${expanded ? 'w-full' : 'justify-end gap-1'}`}>
+    <div className="flex items-center justify-end gap-1">
       {debt.status === 'OPEN' && (
         <button
           type="button"
           onClick={() => setAddingPayment(true)}
           aria-label={`Catat pembayaran untuk ${debt.party}`}
-          className={
-            expanded
-              ? 'inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700'
-              : 'rounded-lg p-1.5 text-gray-400 hover:bg-emerald-50 hover:text-emerald-600'
-          }
+          className="rounded-lg p-1.5 text-gray-400 hover:bg-emerald-50 hover:text-emerald-600"
         >
           <DynamicIcon icon="ph:cash-register" fontSize="16px" />
-          {expanded && 'Catat bayar'}
         </button>
       )}
       <button
@@ -274,14 +228,9 @@ function RowActions({ debt, accounts, onDone, expanded = false }: { debt: DebtDT
         disabled={removal.pending}
         aria-label={`Hapus catatan ${debt.party}`}
         onClick={() => setConfirmingRemoval(true)}
-        className={
-          expanded
-            ? 'inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-bold text-red-500 disabled:opacity-40'
-            : 'rounded-lg p-1.5 text-gray-300 hover:bg-red-50 hover:text-red-500 disabled:opacity-40'
-        }
+        className="rounded-lg p-1.5 text-gray-300 hover:bg-red-50 hover:text-red-500 disabled:opacity-40"
       >
         <DynamicIcon icon="ph:trash" fontSize="16px" />
-        {expanded && 'Hapus'}
       </button>
 
       {addingPayment && <PaymentSheet debt={debt} accounts={accounts} onClose={() => setAddingPayment(false)} onSaved={onDone} />}
@@ -308,33 +257,66 @@ export default function DebtsTable({ type, initialPage, accounts }: DebtsTableOw
       {
         id: 'party',
         header: 'Pihak',
-        meta: { className: 'w-[42vw] max-w-0 sm:w-full' },
+        meta: { className: 'w-56 min-w-56 sm:w-60 sm:min-w-60', headerClassName: 'w-56 min-w-56 sm:w-60 sm:min-w-60' },
         cell: ({ row }) => {
           const debt = row.original;
           const isReceivable = debt.type === 'RECEIVABLE';
+          const accountDescription = debt.account ? `${debt.type === 'PAYABLE' ? 'Masuk ke' : 'Keluar dari'} ${debt.account.name}` : (debt.note ?? 'Tanpa akun awal');
           return (
             <div className="flex items-center gap-3">
               <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${isReceivable ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}`}>
                 <DynamicIcon icon={isReceivable ? 'ph:hand-coins' : 'ph:hand-withdraw'} fontSize="16px" />
               </span>
               <div className="min-w-0 flex-1">
-                <p className="truncate font-semibold text-gray-800">{debt.party}</p>
-                <p className="truncate text-[11px] text-gray-400">
-                  {debt.account ? `${debt.type === 'PAYABLE' ? 'Masuk ke' : 'Keluar dari'} ${debt.account.name}` : (debt.note ?? 'Tanpa akun awal')}
+                <p className="break-words font-semibold text-gray-800">{debt.party}</p>
+                <p className="break-words text-[11px] text-gray-400 sm:hidden">
+                  {debt.date ? formatDateID(debt.date) : 'Tanggal -'} · {accountDescription}
                 </p>
-                <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-gray-100 md:hidden">
-                  <div className={`h-full rounded-full ${isReceivable ? 'bg-emerald-400' : 'bg-red-400'}`} style={{ width: `${getPaidProgress(debt) * 100}%` }} />
-                </div>
+                <p className="hidden break-words text-[11px] text-gray-400 sm:block">{accountDescription}</p>
               </div>
             </div>
           );
         },
       },
       {
+        id: 'date',
+        header: 'Tanggal',
+        cell: ({ row }) => <span className="whitespace-nowrap text-xs text-gray-500">{row.original.date ? formatDateID(row.original.date) : '-'}</span>,
+        meta: { className: 'hidden sm:table-cell sm:w-32 sm:min-w-32', headerClassName: 'hidden sm:table-cell sm:w-32 sm:min-w-32' },
+      },
+      {
+        id: 'amount',
+        header: 'Nominal',
+        cell: ({ row }) => {
+          const debt = row.original;
+          return (
+            <div className="text-right">
+              <p className="whitespace-nowrap font-bold text-gray-800">
+                <Money value={debt.amount} />
+              </p>
+              <p className="mt-0.5 whitespace-nowrap text-[11px] text-gray-400 sm:hidden">
+                Sisa{' '}
+                <span className="font-semibold">
+                  <Money value={debt.remaining} tone={debt.type === 'RECEIVABLE' ? 'income' : 'expense'} />
+                </span>
+              </p>
+            </div>
+          );
+        },
+        meta: { className: 'w-36 min-w-36 text-right', headerClassName: 'w-36 min-w-36 text-right' },
+      },
+      {
         id: 'dueDate',
         header: 'Jatuh Tempo',
-        cell: ({ row }) => <span className="whitespace-nowrap text-xs text-gray-500">{row.original.dueDate ? formatDateID(row.original.dueDate) : '-'}</span>,
-        meta: { className: 'hidden lg:table-cell', headerClassName: 'hidden lg:table-cell' },
+        cell: ({ row }) => (
+          <div>
+            <span className="whitespace-nowrap text-xs text-gray-500">{row.original.dueDate ? formatDateID(row.original.dueDate) : '-'}</span>
+            <div className="mt-1 sm:hidden">
+              <DebtStatusBadge status={row.original.status} />
+            </div>
+          </div>
+        ),
+        meta: { className: 'w-32 min-w-32', headerClassName: 'w-32 min-w-32' },
       },
       {
         id: 'progress',
@@ -352,35 +334,29 @@ export default function DebtsTable({ type, initialPage, accounts }: DebtsTableOw
             </div>
           </div>
         ),
-        meta: { className: 'hidden md:table-cell', headerClassName: 'hidden md:table-cell' },
+        meta: { className: 'w-40 min-w-40', headerClassName: 'w-40 min-w-40' },
       },
       {
         id: 'status',
         header: 'Status',
-        cell: ({ row }) => (
-          <span
-            className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-bold ${row.original.status === 'PAID' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}
-          >
-            {row.original.status === 'PAID' ? 'Lunas' : 'Berjalan'}
-          </span>
-        ),
-        meta: { className: 'hidden sm:table-cell', headerClassName: 'hidden sm:table-cell' },
+        cell: ({ row }) => <DebtStatusBadge status={row.original.status} />,
+        meta: { className: 'hidden sm:table-cell sm:w-24 sm:min-w-24', headerClassName: 'hidden sm:table-cell sm:w-24 sm:min-w-24' },
       },
       {
         id: 'remaining',
         header: 'Sisa',
         cell: ({ row }) => (
-          <span className="whitespace-nowrap text-sm font-bold sm:text-base">
+          <span className="whitespace-nowrap font-bold">
             <Money value={row.original.remaining} tone={row.original.type === 'RECEIVABLE' ? 'income' : 'expense'} />
           </span>
         ),
-        meta: { className: 'text-right', headerClassName: 'text-right' },
+        meta: { className: 'hidden text-right sm:table-cell sm:w-36 sm:min-w-36', headerClassName: 'hidden text-right sm:table-cell sm:w-36 sm:min-w-36' },
       },
       {
         id: 'actions',
         header: '',
         cell: ({ row }) => <RowActions debt={row.original} accounts={accounts} onDone={refresh} />,
-        meta: { className: 'hidden text-right sm:table-cell sm:w-20', headerClassName: 'hidden sm:table-cell sm:w-20' },
+        meta: { className: 'w-20 min-w-20 text-right', headerClassName: 'w-20 min-w-20' },
       },
     ],
     [accounts, refresh],
@@ -392,7 +368,9 @@ export default function DebtsTable({ type, initialPage, accounts }: DebtsTableOw
       initialPage={initialPage}
       fetchPage={({ cursor, q }) => debtApi.list({ type, cursor, q })}
       columns={columns}
+      tableClassName="min-w-[820px] sm:min-w-[1120px]"
       getRowId={_row => _row.uuid}
+      expanderPosition="start"
       renderExpandedRow={_debt => <PaymentHistory debt={_debt} accounts={accounts} onDone={refresh} />}
       searchPlaceholder="Cari nama pihak atau catatan..."
       emptyIcon="ph:handshake"

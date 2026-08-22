@@ -5,11 +5,11 @@ import { usePathname } from 'next/navigation';
 import DynamicIcon from '@/src/components/commons/DynamicIcon';
 
 const NAV_ITEMS = [
-  { href: '/dashboard', label: 'Beranda', icon: 'ph:house' },
-  { href: '/debts', label: 'Hutang', icon: 'ph:handshake' },
-  { href: '/transactions', label: 'Transaksi', icon: 'ph:arrows-left-right' },
-  { href: '/reports', label: 'Laporan', icon: 'ph:file-text' },
-  { href: '/profile', label: 'Profil', icon: 'ph:user-circle' },
+  { href: '/dashboard', label: 'Beranda', icon: 'ph:house', activePrefixes: ['/dashboard'] },
+  { href: '/transactions', label: 'Transaksi', icon: 'ph:arrows-left-right', activePrefixes: ['/transactions'] },
+  { href: '/bills', label: 'Tagihan', icon: 'ph:receipt', activePrefixes: ['/bills', '/debts'] },
+  { href: '/reports', label: 'Laporan', icon: 'ph:file-text', activePrefixes: ['/reports'] },
+  { href: '/profile', label: 'Profil', icon: 'ph:user-circle', activePrefixes: ['/profile'] },
 ] as const;
 
 /**
@@ -24,10 +24,10 @@ export default function BottomNav() {
   /**
    * Menentukan apakah sebuah menu sedang aktif, termasuk saat pengguna berada
    * di salah satu halaman turunannya.
-   * @param {string} href - Path tujuan menu.
+   * @param {(typeof NAV_ITEMS)[number]} item - Menu beserta seluruh prefix rutenya.
    * @returns {boolean} true bila menu tersebut sedang aktif.
    */
-  const getIsActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
+  const getIsActive = (item: (typeof NAV_ITEMS)[number]) => item.activePrefixes.some(_prefix => pathname === _prefix || pathname.startsWith(`${_prefix}/`));
 
   return (
     <>
@@ -37,10 +37,10 @@ export default function BottomNav() {
             <li key={`bottom_nav__item_${_item.href}`} className="flex-1">
               <Link
                 href={_item.href}
-                aria-current={getIsActive(_item.href) ? 'page' : undefined}
-                className={`flex flex-col items-center gap-1 py-2.5 text-[11px] font-semibold transition-colors ${getIsActive(_item.href) ? 'text-gray-900' : 'text-gray-400'}`}
+                aria-current={getIsActive(_item) ? 'page' : undefined}
+                className={`flex flex-col items-center gap-1 py-2.5 text-[11px] font-semibold transition-colors ${getIsActive(_item) ? 'text-gray-900' : 'text-gray-400'}`}
               >
-                <span className={`rounded-full px-4 py-1 transition-colors ${getIsActive(_item.href) ? 'bg-theme-primary' : 'bg-transparent'}`}>
+                <span className={`rounded-full px-4 py-1 transition-colors ${getIsActive(_item) ? 'bg-theme-primary' : 'bg-transparent'}`}>
                   <DynamicIcon icon={_item.icon} fontSize="18px" />
                 </span>
                 {_item.label}
@@ -63,9 +63,9 @@ export default function BottomNav() {
               <li key={`side_nav__item_${_item.href}`}>
                 <Link
                   href={_item.href}
-                  aria-current={getIsActive(_item.href) ? 'page' : undefined}
+                  aria-current={getIsActive(_item) ? 'page' : undefined}
                   className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors ${
-                    getIsActive(_item.href) ? 'bg-theme-primary text-gray-900' : 'text-gray-500 hover:bg-white/70 hover:text-gray-800'
+                    getIsActive(_item) ? 'bg-theme-primary text-gray-900' : 'text-gray-500 hover:bg-white/70 hover:text-gray-800'
                   }`}
                 >
                   <DynamicIcon icon={_item.icon} fontSize="18px" />

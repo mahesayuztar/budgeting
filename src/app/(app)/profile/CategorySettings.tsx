@@ -226,7 +226,7 @@ function CategoryRow({ category, onEdit, onDeleted }: CategoryRowOwnProps) {
 
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-semibold text-gray-800">{category.name}</p>
-        <p className="text-[11px] text-gray-400">{isSystem ? `Kategori sistem · ${category.transactionCount} transaksi` : `${category.transactionCount} transaksi`}</p>
+        <p className="text-[11px] text-gray-400">{`${category.transactionCount} transaksi`}</p>
       </div>
 
       {isSystem ? (

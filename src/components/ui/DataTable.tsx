@@ -62,6 +62,8 @@ type DataTableOwnProps<TData extends RowData> = {
   emptyDescription?: string;
   toolbar?: ReactNode;
   renderExpandedRow?: (row: TData) => ReactNode;
+  expanderPosition?: 'start' | 'end';
+  tableClassName?: string;
 };
 
 /**
@@ -111,6 +113,8 @@ export function TableNextPageLoader() {
  * @param {string} props.emptyTitle - Judul saat daftar kosong.
  * @param {string} props.emptyDescription - Penjelasan tambahan saat daftar kosong, opsional.
  * @param {ReactNode} props.toolbar - Aksi tambahan di samping tombol muat ulang, opsional.
+ * @param {'start' | 'end'} props.expanderPosition - Posisi tombol pembuka detail baris, default `start` agar seragam di seluruh tabel.
+ * @param {string} props.tableClassName - Kelas tambahan pada elemen table, misalnya lebar minimum untuk tabel horizontal.
  * @returns {ReactNode} Tabel data beserta pencarian dan keadaan muat, kosong, serta gagalnya.
  */
 export function DataTable<TData extends RowData>({
@@ -127,6 +131,8 @@ export function DataTable<TData extends RowData>({
   emptyDescription,
   toolbar,
   renderExpandedRow,
+  expanderPosition = 'start',
+  tableClassName = '',
 }: DataTableOwnProps<TData>) {
   const [search, setSearch] = useState('');
   const [filterValues, setFilterValues] = useState<DataTableFilterValues>({});
@@ -354,13 +360,14 @@ export function DataTable<TData extends RowData>({
 
       {rows.length > 0 && (
         <div className={`-mx-4 overflow-x-auto px-4 transition-opacity ${query.isPlaceholderData || isRefreshingRows ? 'opacity-70' : 'opacity-100'}`}>
-          <table className="w-full min-w-full text-sm">
+          <table className={`w-full min-w-full text-sm ${tableClassName}`}>
             <thead>
               {table.getHeaderGroups().map(_headerGroup => (
                 <tr
                   key={`data_table__header_group_${_headerGroup.id}`}
                   className="border-b border-theme-light-border/40 bg-theme-light text-left text-[11px] uppercase tracking-wide text-gray-500"
                 >
+                  {renderExpandedRow && expanderPosition === 'start' && <th aria-label="Detail" className="w-10 min-w-10 rounded-l-lg px-2 py-2.5" />}
                   {_headerGroup.headers.map(_header => (
                     <th
                       key={`data_table__header_${_header.id}`}
@@ -369,7 +376,7 @@ export function DataTable<TData extends RowData>({
                       {_header.isPlaceholder ? null : flexRender(_header.column.columnDef.header, _header.getContext())}
                     </th>
                   ))}
-                  {renderExpandedRow && <th aria-label="Detail" className="w-10 rounded-r-lg px-2 py-2.5" />}
+                  {renderExpandedRow && expanderPosition === 'end' && <th aria-label="Detail" className="w-10 min-w-10 rounded-r-lg px-2 py-2.5" />}
                 </tr>
               ))}
             </thead>
@@ -385,6 +392,18 @@ export function DataTable<TData extends RowData>({
                       aria-expanded={renderExpandedRow ? isExpanded : undefined}
                       className={`group align-middle transition-colors hover:bg-theme-light/70 ${renderExpandedRow ? 'cursor-pointer' : ''}`}
                     >
+                      {renderExpandedRow && expanderPosition === 'start' && (
+                        <td className="w-10 min-w-10 border-b border-gray-50 px-2 py-2.5 text-center">
+                          <button
+                            type="button"
+                            onClick={() => toggleExpandedRow(_row.id)}
+                            aria-label={isExpanded ? 'Tutup detail' : 'Buka detail'}
+                            className={`rounded-lg p-1 text-gray-400 transition-transform duration-200 hover:bg-gray-100 hover:text-gray-700 ${isExpanded ? 'rotate-180' : ''}`}
+                          >
+                            <DynamicIcon icon="ph:caret-down" fontSize="15px" />
+                          </button>
+                        </td>
+                      )}
                       {_row.getAllCells().map(_cell => (
                         <td
                           key={`data_table__cell_${_cell.id}`}
@@ -393,8 +412,8 @@ export function DataTable<TData extends RowData>({
                           {flexRender(_cell.column.columnDef.cell, _cell.getContext())}
                         </td>
                       ))}
-                      {renderExpandedRow && (
-                        <td className="w-10 border-b border-gray-50 px-2 py-2.5 text-right">
+                      {renderExpandedRow && expanderPosition === 'end' && (
+                        <td className="w-10 min-w-10 border-b border-gray-50 px-2 py-2.5 text-right">
                           <button
                             type="button"
                             onClick={() => toggleExpandedRow(_row.id)}

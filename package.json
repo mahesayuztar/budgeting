@@ -15,6 +15,9 @@
     "lint": "eslint",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "test:split-bills": "tsx --test src/lib/split-bills/*.test.ts",
+    "test:split-bills:integration": "node --conditions=react-server --import tsx scripts/check-split-bill-phase2.ts",
+    "test:toast": "tsx --test src/components/ui/Toast.test.ts",
     "balances:recompute": "tsx scripts/recompute-balances.ts"
   },
   "dependencies": {

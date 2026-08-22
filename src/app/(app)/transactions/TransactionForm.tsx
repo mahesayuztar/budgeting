@@ -125,7 +125,6 @@ export default function TransactionForm({ categories, accounts, editingUuid, ini
           placeholder={isTransfer ? 'Transfer' : 'Tanpa kategori'}
           searchPlaceholder="Cari kategori..."
           disabled={isTransfer}
-          hint={isTransfer ? 'Kategori sistem ditetapkan otomatis untuk transaksi transfer.' : undefined}
           options={visibleCategories.map(_category => ({
             value: _category.uuid,
             label: _category.name,

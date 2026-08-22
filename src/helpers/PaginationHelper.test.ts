@@ -13,28 +13,28 @@ function toPage(rows: TestRow[]) {
   );
 }
 
-test('ukuran halaman tabel dibatasi ke 15 baris', () => {
-  assert.equal(DEFAULT_PAGE_SIZE, 15);
-  assert.equal(MAX_PAGE_SIZE, 15);
-  assert.equal(cursorParamsSchema.safeParse({ limit: 15 }).success, true);
-  assert.equal(cursorParamsSchema.safeParse({ limit: 16 }).success, false);
+test('ukuran halaman tabel dibatasi ke 10 baris', () => {
+  assert.equal(DEFAULT_PAGE_SIZE, 10);
+  assert.equal(MAX_PAGE_SIZE, 10);
+  assert.equal(cursorParamsSchema.safeParse({ limit: 10 }).success, true);
+  assert.equal(cursorParamsSchema.safeParse({ limit: 11 }).success, false);
 
   const rows = Array.from({ length: DEFAULT_PAGE_SIZE + 1 }, (_unused, _index) => ({ id: 100 - _index }));
   const page = toPage(rows);
 
-  assert.equal(page.items.length, 15);
+  assert.equal(page.items.length, 10);
   assert.deepEqual(
     page.items,
-    rows.slice(0, 15).map(_row => _row.id),
+    rows.slice(0, 10).map(_row => _row.id),
   );
-  assert.deepEqual(decodeCursor(page.nextCursor ?? undefined), [String(rows[14].id)]);
+  assert.deepEqual(decodeCursor(page.nextCursor ?? undefined), [String(rows[9].id)]);
 });
 
 test('cursor kosong bila jumlah baris tidak melewati batas halaman', () => {
   const exactPage = toPage(Array.from({ length: DEFAULT_PAGE_SIZE }, (_unused, _index) => ({ id: _index + 1 })));
   const shortPage = toPage([{ id: 1 }]);
 
-  assert.equal(exactPage.items.length, 15);
+  assert.equal(exactPage.items.length, 10);
   assert.equal(exactPage.nextCursor, null);
   assert.deepEqual(shortPage.items, [1]);
   assert.equal(shortPage.nextCursor, null);

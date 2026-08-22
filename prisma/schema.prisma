@@ -29,6 +29,46 @@ enum AccountType {
   BANK
 }
 
+enum SplitBillStatus {
+  DRAFT
+  FINALIZED
+}
+
+enum SplitBillPriceMode {
+  UNIT_PRICE
+  LINE_TOTAL
+}
+
+enum SplitBillAdjustmentKind {
+  DISCOUNT
+  TAX
+  SERVICE
+  ROUNDING
+  OTHER
+}
+
+enum SplitBillAdjustmentCalculation {
+  FIXED
+  PERCENT
+}
+
+enum SplitBillAdjustmentBase {
+  ITEMS_NET
+  RUNNING_TOTAL
+  CUSTOM
+}
+
+enum SplitBillAdjustmentEffect {
+  ADD
+  SUBTRACT
+  INCLUDED
+}
+
+enum SplitBillAdjustmentDistribution {
+  PROPORTIONAL
+  EQUAL
+}
+
 model User {
   id              Int       @id @default(autoincrement())
   uuid            String    @unique @default(uuid())
@@ -48,6 +88,7 @@ model User {
   transactions Transaction[]
   debts        Debt[]
   accounts     Account[]
+  splitBills   SplitBill[]
 }
 
 model Session {
@@ -172,4 +213,98 @@ model Account {
 
   @@index([userId])
   @@index([userId, type])
+}
+
+model SplitBill {
+  id                   Int             @id @default(autoincrement())
+  uuid                 String          @unique @default(uuid())
+  userId               Int
+  user                 User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title                String
+  merchantName         String?
+  receiptNumber        String?
+  occurredAt           DateTime        @db.Date
+  note                 String?
+  currency             String          @default("IDR")
+  status               SplitBillStatus @default(DRAFT)
+  expectedReceiptTotal Decimal?        @db.Decimal(18, 2)
+  itemsSubtotal        Decimal         @default(0) @db.Decimal(18, 2)
+  adjustmentTotal      Decimal         @default(0) @db.Decimal(18, 2)
+  grandTotal           Decimal         @default(0) @db.Decimal(18, 2)
+  version              Int             @default(1)
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+
+  participants SplitBillParticipant[]
+  items        SplitBillItem[]
+  adjustments  SplitBillAdjustment[]
+
+  @@index([userId, occurredAt, id])
+  @@index([userId, status])
+}
+
+model SplitBillParticipant {
+  id          Int       @id @default(autoincrement())
+  uuid        String    @unique @default(uuid())
+  splitBillId Int
+  splitBill   SplitBill @relation(fields: [splitBillId], references: [id], onDelete: Cascade)
+  name        String
+  isPayer     Boolean   @default(false)
+  sortOrder   Int
+
+  allocations SplitBillItemAllocation[]
+
+  @@index([splitBillId, sortOrder])
+}
+
+model SplitBillItem {
+  id             Int                @id @default(autoincrement())
+  uuid           String             @unique @default(uuid())
+  splitBillId    Int
+  splitBill      SplitBill          @relation(fields: [splitBillId], references: [id], onDelete: Cascade)
+  name           String
+  quantity       Int
+  priceMode      SplitBillPriceMode @default(UNIT_PRICE)
+  unitPrice      Decimal?           @db.Decimal(18, 2)
+  lineTotal      Decimal?           @db.Decimal(18, 2)
+  discountAmount Decimal            @default(0) @db.Decimal(18, 2)
+  grossAmount    Decimal            @db.Decimal(18, 2)
+  netAmount      Decimal            @db.Decimal(18, 2)
+  sortOrder      Int
+
+  allocations SplitBillItemAllocation[]
+
+  @@index([splitBillId, sortOrder])
+}
+
+model SplitBillItemAllocation {
+  id            Int                  @id @default(autoincrement())
+  itemId        Int
+  item          SplitBillItem        @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  participantId Int
+  participant   SplitBillParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  quantity      Int
+  amount        Decimal              @db.Decimal(18, 2)
+
+  @@unique([itemId, participantId])
+  @@index([participantId])
+}
+
+model SplitBillAdjustment {
+  id           Int                             @id @default(autoincrement())
+  uuid         String                          @unique @default(uuid())
+  splitBillId  Int
+  splitBill    SplitBill                       @relation(fields: [splitBillId], references: [id], onDelete: Cascade)
+  label        String
+  kind         SplitBillAdjustmentKind
+  calculation  SplitBillAdjustmentCalculation
+  baseMode     SplitBillAdjustmentBase
+  effect       SplitBillAdjustmentEffect
+  distribution SplitBillAdjustmentDistribution
+  rate         Decimal?                        @db.Decimal(9, 4)
+  baseAmount   Decimal?                        @db.Decimal(18, 2)
+  amount       Decimal                         @db.Decimal(18, 2)
+  sortOrder    Int
+
+  @@index([splitBillId, sortOrder])
 }
