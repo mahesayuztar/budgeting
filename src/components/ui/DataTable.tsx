@@ -79,10 +79,10 @@ function TableSkeleton() {
 
 /**
  * Tabel data dengan pencarian, filter bertingkat, muat ulang, dan gulir tak hingga berbasis
- * cursor. Rangka baris ditampilkan pada tiga keadaan: muat awal, dan refetch
- * yang dipicu `invalidateQueries` setelah operasi CRUD. Pergantian kata
- * pencarian tidak ikut memicunya karena sudah ditandai lewat
- * `isPlaceholderData`, sehingga daftar lama tetap terlihat sambil meredup.
+ * cursor. Rangka baris hanya ditampilkan bila belum ada data sama sekali.
+ * Refetch yang dipicu `invalidateQueries` setelah operasi CRUD mempertahankan
+ * baris lama sambil meredupkannya, sehingga latensi server tidak mengosongkan
+ * seluruh tabel. Pergantian pencarian juga memakai data placeholder yang sama.
  * @param {DataTableOwnProps<TData>} props - Props komponen.
  * @param {readonly unknown[]} props.queryKey - Query key TanStack Query untuk daftar ini.
  * @param {(params: DataTableFetchParams) => Promise<Page<TData>>} props.fetchPage - Pengambil satu halaman data beserta nilai filter aktif.
@@ -181,9 +181,9 @@ export function DataTable<TData extends RowData>({
     return () => observer.disconnect();
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
-  const isInitialLoading = query.isPending;
-  const isRevalidating = query.isFetching && !isInitialLoading && !isFetchingNextPage && !query.isPlaceholderData;
-  const isEmpty = !isInitialLoading && !isRevalidating && rows.length === 0;
+  const isLoadingWithoutRows = query.isFetching && rows.length === 0;
+  const isRefreshingRows = query.isFetching && rows.length > 0 && !isFetchingNextPage;
+  const isEmpty = !query.isFetching && !query.isError && rows.length === 0;
 
   function getVisibleFilterOptions(filter: DataTableFilter) {
     const parentValue = filter.parentId ? filterValues[filter.parentId] : undefined;
@@ -303,7 +303,7 @@ export function DataTable<TData extends RowData>({
         </div>
       )}
 
-      {(isInitialLoading || isRevalidating) && <TableSkeleton />}
+      {isLoadingWithoutRows && <TableSkeleton />}
 
       {isEmpty && (
         <EmptyState
@@ -315,8 +315,8 @@ export function DataTable<TData extends RowData>({
         />
       )}
 
-      {!isRevalidating && rows.length > 0 && (
-        <div className={`-mx-4 overflow-x-auto px-4 transition-opacity ${query.isPlaceholderData ? 'opacity-60' : 'opacity-100'}`}>
+      {rows.length > 0 && (
+        <div className={`-mx-4 overflow-x-auto px-4 transition-opacity ${query.isPlaceholderData || isRefreshingRows ? 'opacity-70' : 'opacity-100'}`}>
           <table className="w-full min-w-full text-sm">
             <thead>
               {table.getHeaderGroups().map(_headerGroup => (

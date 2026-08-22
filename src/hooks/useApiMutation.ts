@@ -1,13 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { useMutation, useQueryClient, type QueryKey } from '@tanstack/react-query';
+import { useMutation, useQueryClient, type QueryClient, type QueryKey } from '@tanstack/react-query';
 import { ApiError, type FieldErrors } from '@/src/lib/ApiClient';
 
 type ApiMutationHandler<TArgs extends unknown[], TResult> = (...args: TArgs) => Promise<TResult>;
 
-type ApiMutationOptions = {
+type ApiMutationOptions<TResult> = {
   invalidateKeys?: QueryKey[];
+  updateCache?: (queryClient: QueryClient, result: TResult) => void;
 };
 
 /**
@@ -19,18 +20,21 @@ type ApiMutationOptions = {
  * @param {ApiMutationHandler<TArgs, TResult>} action - Aksi async yang memanggil api client.
  * @param {ApiMutationOptions} options - Opsi mutasi.
  * @param {QueryKey[]} options.invalidateKeys - Query key yang di-invalidate setelah mutasi sukses.
+ * @param {(queryClient: QueryClient, result: TResult) => void} options.updateCache - Pembaruan cache sinkron sebelum refetch background, opsional.
  * @returns {{ run: (...args: TArgs) => Promise<TResult | undefined>; pending: boolean; error: string | null; fieldErrors: FieldErrors; reset: () => void }} Pemicu mutasi beserta state dan pembersihnya.
  */
-export function useApiMutation<TArgs extends unknown[], TResult>(action: ApiMutationHandler<TArgs, TResult>, options: ApiMutationOptions = {}) {
+export function useApiMutation<TArgs extends unknown[], TResult>(action: ApiMutationHandler<TArgs, TResult>, options: ApiMutationOptions<TResult> = {}) {
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
   const mutation = useMutation({
     mutationFn: (args: TArgs) => action(...args),
-    onSuccess: () => {
+    onSuccess: result => {
+      options.updateCache?.(queryClient, result);
+
       for (const _queryKey of options.invalidateKeys ?? []) {
-        queryClient.invalidateQueries({ queryKey: _queryKey });
+        void queryClient.invalidateQueries({ queryKey: _queryKey });
       }
     },
   });

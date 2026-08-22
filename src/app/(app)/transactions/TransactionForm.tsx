@@ -7,6 +7,7 @@ import { ErrorAlert } from '@/src/components/ui/Alert';
 import { Sheet } from '@/src/components/ui/Sheet';
 import { useApiMutation } from '@/src/hooks/useApiMutation';
 import { transactionApi } from '@/src/lib/transactions/TransactionApi';
+import { syncSavedTransactionToCache } from '@/src/lib/transactions/TransactionQueryCache';
 import { toTransactionInput, type TransactionFormState } from '@/src/lib/transactions/TransactionFormState';
 import type { CategoryDTO } from '@/src/lib/categories/CategoryService';
 import type { AccountDTO } from '@/src/lib/accounts/AccountService';
@@ -67,7 +68,10 @@ export default function TransactionForm({ categories, accounts, editingUuid, ini
 
   const save = useCallback((uuid: string | null, input: TransactionInput) => (uuid ? transactionApi.update(uuid, input) : transactionApi.create(input)), []);
 
-  const { run, pending, error, fieldErrors } = useApiMutation(save, { invalidateKeys: [['transactions']] });
+  const { run, pending, error, fieldErrors } = useApiMutation(save, {
+    invalidateKeys: [['transactions']],
+    updateCache: syncSavedTransactionToCache,
+  });
 
   const isTransfer = form.type === 'TRANSFER';
   const visibleCategories = useMemo(() => categories.filter(_category => _category.type === form.type), [categories, form.type]);
