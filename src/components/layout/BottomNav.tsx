@@ -6,8 +6,8 @@ import DynamicIcon from '@/src/components/commons/DynamicIcon';
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Beranda', icon: 'ph:house' },
-  { href: '/transactions', label: 'Transaksi', icon: 'ph:arrows-left-right' },
   { href: '/debts', label: 'Hutang', icon: 'ph:handshake' },
+  { href: '/transactions', label: 'Transaksi', icon: 'ph:arrows-left-right' },
   { href: '/reports', label: 'Laporan', icon: 'ph:file-text' },
   { href: '/profile', label: 'Profil', icon: 'ph:user-circle' },
 ] as const;
