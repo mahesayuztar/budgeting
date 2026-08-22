@@ -5,9 +5,9 @@ import type { TransactionInput } from './TransactionValidator';
 /**
  * Bentuk state form transaksi. Seluruh field mengikuti `TransactionInput`,
  * kontrak yang sama yang diterima api client, sehingga satu alur data cukup
- * dipegang satu state. Hanya `amount` yang dilonggarkan menjadi string karena
- * `<input type="number">` selalu memberi string, sementara `TransactionInput`
- * sudah memakai hasil coerce Zod berupa number.
+ * dipegang satu state. Hanya `amount` yang dilonggarkan menjadi string kanonik
+ * karena `MoneyInput` mempertahankan koma atau nol pecahan yang sedang diketik,
+ * sementara `TransactionInput` sudah memakai hasil coerce Zod berupa number.
  */
 export type TransactionFormState = Omit<TransactionInput, 'amount'> & {
   amount: string;

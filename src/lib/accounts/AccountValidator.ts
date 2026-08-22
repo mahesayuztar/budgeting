@@ -8,7 +8,7 @@ export const accountSchema = z
     color: z.string().nullable(),
     bankName: z.string().trim().max(100).nullable(),
     accountNumber: z.string().trim().max(100).nullable(),
-    openingBalance: z.string(),
+    openingBalance: z.string().regex(/^-?\d+(?:\.\d{0,2})?$/, 'Saldo awal tidak valid.'),
   })
   .superRefine((_input, _context) => {
     if (_input.type === 'BANK' && !_input.bankName) {

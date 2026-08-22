@@ -1,6 +1,6 @@
 'use client';
 
-import { type InputHTMLAttributes, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { type ChangeEvent, type InputHTMLAttributes, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import DynamicIcon from '@/src/components/commons/DynamicIcon';
 
 export const CONTROL_CLASS = 'w-full rounded-xl border bg-white px-4 py-3 text-gray-800 outline-none transition-all duration-200 placeholder:text-gray-400';
@@ -31,6 +31,16 @@ type InputOwnProps = InputHTMLAttributes<HTMLInputElement> & {
   label: string;
   errors?: string[];
   hint?: string;
+};
+
+type MoneyInputOwnProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'type' | 'inputMode' | 'value' | 'onChange'> & {
+  label: string;
+  value: string;
+  onValueChange: (value: string) => void;
+  errors?: string[];
+  hint?: string;
+  allowNegative?: boolean;
+  maxFractionDigits?: number;
 };
 
 type SelectOwnProps = {
@@ -160,6 +170,95 @@ export function Input({ label, errors, hint, className = '', ...rest }: InputOwn
   return (
     <FieldShell label={label} errors={errors} hint={hint}>
       <input {...rest} className={`${CONTROL_CLASS} ${getBorderClass(Boolean(errors?.length))} ${className}`} />
+    </FieldShell>
+  );
+}
+
+/**
+ * Memformat angka kanonik bertitik desimal menjadi tampilan Indonesia. String
+ * diproses langsung agar koma atau nol desimal yang baru diketik tidak hilang
+ * seperti ketika nilai dipaksa melewati `Number` atau `Intl.NumberFormat`.
+ * @param {string} value - Angka kanonik, misalnya `1234.50`.
+ * @returns {string} Tampilan Indonesia, misalnya `1.234,50`.
+ */
+export function formatIndonesianNumberInput(value: string) {
+  if (!value) return '';
+  if (value === '-') return '-';
+
+  const negative = value.startsWith('-');
+  const unsigned = negative ? value.slice(1) : value;
+  const decimalIndex = unsigned.indexOf('.');
+  const hasDecimal = decimalIndex >= 0;
+  const integerPart = (hasDecimal ? unsigned.slice(0, decimalIndex) : unsigned).replace(/\D/g, '') || '0';
+  const fractionPart = hasDecimal ? unsigned.slice(decimalIndex + 1).replace(/\D/g, '') : '';
+  const groupedInteger = integerPart.replace(/^0+(?=\d)/, '').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+
+  return `${negative ? '-' : ''}${groupedInteger}${hasDecimal ? `,${fractionPart}` : ''}`;
+}
+
+/**
+ * Mengubah teks tampilan Indonesia menjadi angka kanonik tanpa separator
+ * ribuan. Koma dipertahankan sebagai titik desimal dan bagian pecahan dibatasi
+ * supaya nilai tetap cocok dengan kolom uang `Decimal(..., 2)`.
+ * @param {string} displayValue - Teks dari input, misalnya `1.234,50`.
+ * @param {boolean} allowNegative - Izinkan tanda minus di awal.
+ * @param {number} maxFractionDigits - Jumlah digit pecahan maksimum.
+ * @returns {string} Angka kanonik, misalnya `1234.50`.
+ */
+export function parseIndonesianNumberInput(displayValue: string, allowNegative = false, maxFractionDigits = 2) {
+  if (!displayValue) return '';
+
+  const negative = allowNegative && displayValue.trimStart().startsWith('-');
+  const decimalIndex = displayValue.indexOf(',');
+  const hasDecimal = decimalIndex >= 0;
+  const integerSource = hasDecimal ? displayValue.slice(0, decimalIndex) : displayValue;
+  const fractionSource = hasDecimal ? displayValue.slice(decimalIndex + 1) : '';
+  const integerDigits = integerSource.replace(/\D/g, '');
+  const fractionDigits = fractionSource.replace(/\D/g, '').slice(0, Math.max(0, maxFractionDigits));
+
+  if (!integerDigits && !hasDecimal) return negative ? '-' : '';
+
+  const normalizedInteger = (integerDigits || '0').replace(/^0+(?=\d)/, '');
+  return `${negative ? '-' : ''}${normalizedInteger}${hasDecimal ? `.${fractionDigits}` : ''}`;
+}
+
+/**
+ * Input nominal terkontrol dengan tampilan angka Indonesia. State induk selalu
+ * menerima bentuk kanonik bertitik desimal, sedangkan pengguna melihat titik
+ * ribuan dan koma desimal. Seluruh transformasi terjadi pada event input tanpa
+ * effect atau state bayangan sehingga satu ketikan hanya memicu satu update.
+ * Tombol desimal bertitik pada keyboard tertentu ikut diterjemahkan menjadi
+ * koma berdasarkan data `InputEvent`, bukan dianggap separator ribuan.
+ * @param {MoneyInputOwnProps} props - Props input nominal.
+ * @param {string} props.value - Nilai kanonik yang dikontrol induk.
+ * @param {(value: string) => void} props.onValueChange - Penerima nilai kanonik terbaru.
+ * @param {boolean} props.allowNegative - Izinkan nominal negatif, default false.
+ * @param {number} props.maxFractionDigits - Digit pecahan maksimum, default 2.
+ * @returns {ReactNode} Field nominal dengan formatter Indonesia.
+ */
+export function MoneyInput({ label, value, onValueChange, errors, hint, allowNegative = false, maxFractionDigits = 2, className = '', ...rest }: MoneyInputOwnProps) {
+  function handleChange(event: ChangeEvent<HTMLInputElement>) {
+    let displayValue = event.target.value;
+    const nativeEvent = event.nativeEvent as InputEvent;
+
+    if (nativeEvent.inputType === 'insertText' && nativeEvent.data === '.') {
+      const caret = event.target.selectionStart ?? displayValue.length;
+      displayValue = `${displayValue.slice(0, Math.max(0, caret - 1))},${displayValue.slice(caret)}`;
+    }
+
+    onValueChange(parseIndonesianNumberInput(displayValue, allowNegative, maxFractionDigits));
+  }
+
+  return (
+    <FieldShell label={label} errors={errors} hint={hint}>
+      <input
+        {...rest}
+        type="text"
+        inputMode="decimal"
+        value={formatIndonesianNumberInput(value)}
+        onChange={handleChange}
+        className={`${CONTROL_CLASS} ${getBorderClass(Boolean(errors?.length))} ${className}`}
+      />
     </FieldShell>
   );
 }

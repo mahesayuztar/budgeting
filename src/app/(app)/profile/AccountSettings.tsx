@@ -4,7 +4,7 @@ import { useCallback, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import DynamicIcon from '@/src/components/commons/DynamicIcon';
 import { Button } from '@/src/components/ui/Button';
-import { Input } from '@/src/components/ui/Field';
+import { Input, MoneyInput } from '@/src/components/ui/Field';
 import { ErrorAlert } from '@/src/components/ui/Alert';
 import { EmptyState } from '@/src/components/ui/EmptyState';
 import { Sheet } from '@/src/components/ui/Sheet';
@@ -305,13 +305,13 @@ export default function AccountSettings({ accounts }: AccountSettingsOwnProps) {
             </>
           )}
 
-          <Input
+          <MoneyInput
             label="Saldo Awal"
             required
-            inputMode="decimal"
+            allowNegative
             placeholder="0"
             value={form.openingBalance}
-            onChange={event => setForm(_previous => ({ ..._previous, openingBalance: event.target.value }))}
+            onValueChange={openingBalance => setForm(_previous => ({ ..._previous, openingBalance }))}
             errors={fieldErrors.openingBalance}
           />
 

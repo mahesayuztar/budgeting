@@ -6,7 +6,7 @@ import DynamicIcon from '@/src/components/commons/DynamicIcon';
 import { Money } from '@/src/components/ui/Money';
 import { DataTable, type AppColumnDef } from '@/src/components/ui/DataTable';
 import { Button } from '@/src/components/ui/Button';
-import { Input } from '@/src/components/ui/Field';
+import { Input, MoneyInput } from '@/src/components/ui/Field';
 import { ErrorAlert } from '@/src/components/ui/Alert';
 import { Sheet } from '@/src/components/ui/Sheet';
 import { ConfirmModal } from '@/src/components/ui/ConfirmModal';
@@ -128,18 +128,7 @@ function RowActions({ debt, onDone }: RowActionsOwnProps) {
 
           <ErrorAlert message={payment.error} />
 
-          <Input
-            label="Jumlah Bayar"
-            type="number"
-            inputMode="numeric"
-            min="1"
-            step="1"
-            required
-            placeholder="0"
-            value={amount}
-            onChange={event => setAmount(event.target.value)}
-            errors={payment.fieldErrors.amount}
-          />
+          <MoneyInput label="Jumlah Bayar" required placeholder="0" value={amount} onValueChange={setAmount} errors={payment.fieldErrors.amount} />
           <Input label="Tanggal Bayar" type="date" required value={paidAt} onChange={event => setPaidAt(event.target.value)} errors={payment.fieldErrors.paidAt} />
           <Input label="Catatan" placeholder="Opsional" maxLength={255} value={note} onChange={event => setNote(event.target.value)} errors={payment.fieldErrors.note} />
 

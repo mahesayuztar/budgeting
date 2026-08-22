@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/src/components/ui/Button';
-import { Input } from '@/src/components/ui/Field';
+import { Input, MoneyInput } from '@/src/components/ui/Field';
 import { ErrorAlert } from '@/src/components/ui/Alert';
 import { Sheet } from '@/src/components/ui/Sheet';
 import { AddButton } from '@/src/components/ui/AddButton';
@@ -95,18 +95,7 @@ export default function DebtForm() {
             errors={fieldErrors.party}
           />
 
-          <Input
-            label="Jumlah"
-            type="number"
-            inputMode="numeric"
-            min="1"
-            step="1"
-            required
-            placeholder="0"
-            value={amount}
-            onChange={event => setAmount(event.target.value)}
-            errors={fieldErrors.amount}
-          />
+          <MoneyInput label="Jumlah" required placeholder="0" value={amount} onValueChange={setAmount} errors={fieldErrors.amount} />
 
           <Input label="Tanggal" type="date" required value={date} onChange={event => setDate(event.target.value)} errors={fieldErrors.date} />
 

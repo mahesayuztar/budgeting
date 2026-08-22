@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState, type FormEvent } from 'react';
 import { Button } from '@/src/components/ui/Button';
-import { Input, Select, type SelectOption } from '@/src/components/ui/Field';
+import { Input, MoneyInput, Select, type SelectOption } from '@/src/components/ui/Field';
 import { ErrorAlert } from '@/src/components/ui/Alert';
 import { Sheet } from '@/src/components/ui/Sheet';
 import { useApiMutation } from '@/src/hooks/useApiMutation';
@@ -122,16 +122,12 @@ export default function TransactionForm({ categories, accounts, editingUuid, ini
 
         <ErrorAlert message={error} />
 
-        <Input
+        <MoneyInput
           label="Jumlah"
-          type="number"
-          inputMode="numeric"
-          min="1"
-          step="1"
           required
           placeholder="0"
           value={form.amount}
-          onChange={event => setForm(_previous => ({ ..._previous, amount: event.target.value }))}
+          onValueChange={amount => setForm(_previous => ({ ..._previous, amount }))}
           errors={fieldErrors.amount}
         />
 
