@@ -218,7 +218,8 @@ async function applyBalanceMovements(client: Prisma.TransactionClient, movements
 class TransactionService {
   /**
    * Mengambil satu halaman transaksi milik pengguna sesuai filter periode,
-   * tipe, dan kata kunci. Kolom `id` ikut diambil semata-mata untuk membentuk
+   * tipe, kategori, akun, dan kata kunci. Filter akun mencakup sisi sumber
+   * maupun tujuan transfer. Kolom `id` ikut diambil semata-mata untuk membentuk
    * cursor dan tidak diteruskan ke DTO.
    * @param {number} userId - ID pengguna pemilik transaksi.
    * @param {TransactionListParams} params - Filter periode, tipe, pencarian, cursor, dan limit.
@@ -231,7 +232,19 @@ class TransactionService {
       where: {
         userId,
         ...(params.type ? { type: params.type } : {}),
-        AND: [buildPeriodFilter(params), buildSearchFilter(params.q), buildCursorFilter(params.cursor)],
+        AND: [
+          buildPeriodFilter(params),
+          buildSearchFilter(params.q),
+          buildCursorFilter(params.cursor),
+          ...(params.categoryUuid ? [{ category: { uuid: params.categoryUuid } }] : []),
+          ...(params.accountUuid
+            ? [
+                {
+                  OR: [{ account: { uuid: params.accountUuid } }, { toAccount: { uuid: params.accountUuid } }],
+                },
+              ]
+            : []),
+        ],
       },
       select: { ...transactionSelect, id: true },
       orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],

@@ -5,7 +5,7 @@ import { transactionListSchema, transactionSchema } from '@/src/lib/transactions
 
 /**
  * Mengambil satu halaman transaksi milik pengguna yang sedang masuk sesuai
- * filter periode, tipe, kata kunci, dan cursor pada query params.
+ * filter periode, tipe, kategori, akun, kata kunci, dan cursor pada query params.
  * @param {Request} request - Permintaan HTTP beserta query params penyaringnya.
  * @returns {Promise<Response>} Halaman transaksi beserta cursor berikutnya, atau respons error.
  */

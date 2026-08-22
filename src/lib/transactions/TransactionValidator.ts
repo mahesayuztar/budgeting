@@ -40,6 +40,8 @@ export const transactionListSchema = cursorParamsSchema.extend({
   year: z.coerce.number().int().min(2000).max(2100).optional(),
   month: z.coerce.number().int().min(1).max(12).optional(),
   type: z.enum(['INCOME', 'EXPENSE', 'TRANSFER']).optional(),
+  categoryUuid: z.uuid('Kategori tidak valid.').optional(),
+  accountUuid: z.uuid('Akun tidak valid.').optional(),
 });
 
 export type TransactionListParams = z.infer<typeof transactionListSchema>;

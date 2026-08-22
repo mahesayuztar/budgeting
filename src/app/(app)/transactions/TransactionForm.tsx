@@ -25,6 +25,8 @@ function toAccountOptions(accounts: AccountDTO[]): SelectOption[] {
     value: _account.uuid,
     label: _account.name,
     description: _account.type === 'BANK' ? [_account.bankName, _account.accountNumber].filter(Boolean).join(' • ') : 'Cash',
+    icon: _account.type === 'BANK' ? 'ph:bank' : 'ph:wallet',
+    color: _account.color ?? '#F1F1F1',
   }));
 }
 
@@ -139,6 +141,8 @@ export default function TransactionForm({ categories, accounts, editingUuid, ini
           options={visibleCategories.map(_category => ({
             value: _category.uuid,
             label: _category.name,
+            icon: _category.icon ?? 'ph:circle-dashed',
+            color: _category.color ?? '#F1F1F1',
           }))}
         />
 

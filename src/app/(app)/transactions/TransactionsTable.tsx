@@ -7,7 +7,7 @@ import { Money } from '@/src/components/ui/Money';
 import { Button } from '@/src/components/ui/Button';
 import { Sheet } from '@/src/components/ui/Sheet';
 import { ConfirmModal } from '@/src/components/ui/ConfirmModal';
-import { DataTable, type AppColumnDef } from '@/src/components/ui/DataTable';
+import { DataTable, type AppColumnDef, type DataTableFilter } from '@/src/components/ui/DataTable';
 import { useApiMutation } from '@/src/hooks/useApiMutation';
 import { transactionApi } from '@/src/lib/transactions/TransactionApi';
 import { toTransactionFormState } from '@/src/lib/transactions/TransactionFormState';
@@ -30,6 +30,12 @@ type TransactionsTableOwnProps = {
   categories: CategoryDTO[];
   accounts: AccountDTO[];
 };
+
+const TRANSACTION_TYPE_FILTER_OPTIONS = [
+  { value: 'INCOME', label: 'Pemasukan', icon: 'ph:arrow-down-left', color: '#DCFCE7' },
+  { value: 'EXPENSE', label: 'Pengeluaran', icon: 'ph:arrow-up-right', color: '#FEE2E2' },
+  { value: 'TRANSFER', label: 'Transfer', icon: 'ph:arrows-left-right', color: '#DBEAFE' },
+] as const;
 
 /**
  * Tombol hapus satu baris transaksi beserta dialog konfirmasinya. Daftar
@@ -97,6 +103,44 @@ export default function TransactionsTable({ year, month, initialPage, categories
   const router = useRouter();
   const [detail, setDetail] = useState<TransactionDTO | null>(null);
   const [editing, setEditing] = useState<TransactionDTO | null>(null);
+
+  const filters = useMemo<DataTableFilter[]>(
+    () => [
+      {
+        id: 'type',
+        label: 'Tipe',
+        allLabel: 'Semua tipe',
+        options: TRANSACTION_TYPE_FILTER_OPTIONS,
+      },
+      {
+        id: 'categoryUuid',
+        label: 'Kategori',
+        allLabel: 'Semua kategori',
+        parentId: 'type',
+        options: categories.map(_category => ({
+          value: _category.uuid,
+          label: _category.name,
+          description: _category.type === 'INCOME' ? 'Pemasukan' : 'Pengeluaran',
+          parentValue: _category.type,
+          icon: _category.icon ?? 'ph:circle-dashed',
+          color: _category.color ?? '#F1F1F1',
+        })),
+      },
+      {
+        id: 'accountUuid',
+        label: 'Akun',
+        allLabel: 'Semua akun',
+        options: accounts.map(_account => ({
+          value: _account.uuid,
+          label: _account.name,
+          description: _account.type === 'BANK' ? (_account.bankName ?? 'Rekening bank') : 'Cash',
+          icon: _account.type === 'BANK' ? 'ph:bank' : 'ph:wallet',
+          color: _account.color ?? '#F1F1F1',
+        })),
+      },
+    ],
+    [categories, accounts],
+  );
 
   function openEditFromDetail(transaction: TransactionDTO) {
     setDetail(null);
@@ -203,7 +247,19 @@ export default function TransactionsTable({ year, month, initialPage, categories
       <DataTable
         queryKey={['transactions', year, month]}
         initialPage={initialPage}
-        fetchPage={({ cursor, q }) => transactionApi.list({ year, month, cursor, q })}
+        filters={filters}
+        filterTitle="Filter transaksi"
+        fetchPage={({ cursor, q, filters: _filters }) =>
+          transactionApi.list({
+            year,
+            month,
+            cursor,
+            q,
+            type: _filters.type as 'INCOME' | 'EXPENSE' | 'TRANSFER' | undefined,
+            categoryUuid: _filters.categoryUuid,
+            accountUuid: _filters.accountUuid,
+          })
+        }
         columns={columns}
         getRowId={_row => _row.uuid}
         searchPlaceholder="Cari catatan atau kategori..."

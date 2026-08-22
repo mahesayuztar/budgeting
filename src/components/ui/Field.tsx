@@ -9,6 +9,8 @@ export type SelectOption = {
   value: string;
   label: string;
   description?: string;
+  icon?: string;
+  color?: string;
   disabled?: boolean;
 };
 
@@ -17,6 +19,7 @@ type FieldShellOwnProps = {
   errors?: string[];
   hint?: string;
   children: ReactNode;
+  hideLabel?: boolean;
 };
 
 type FieldErrorOwnProps = {
@@ -44,6 +47,8 @@ type SelectOwnProps = {
   regexSearch?: boolean;
   name?: string;
   className?: string;
+  hideLabel?: boolean;
+  compact?: boolean;
 };
 
 /**
@@ -123,10 +128,10 @@ export function FieldError({ messages, fieldName }: FieldErrorOwnProps) {
  * @param {ReactNode} props.children - Kontrol isian yang dibungkus.
  * @returns {ReactNode} Field lengkap beserta label, petunjuk, dan pesan errornya.
  */
-export function FieldShell({ label, errors, hint, children }: FieldShellOwnProps) {
+export function FieldShell({ label, errors, hint, children, hideLabel = false }: FieldShellOwnProps) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label className="text-sm font-semibold text-gray-700">{label}</label>
+      <label className={hideLabel ? 'sr-only' : 'text-sm font-semibold text-gray-700'}>{label}</label>
 
       {children}
 
@@ -167,7 +172,7 @@ export function Input({ label, errors, hint, className = '', ...rest }: InputOwn
  * @param {SelectOwnProps} props - Props komponen.
  * @param {string} props.label - Label field.
  * @param {string} props.value - Nilai opsi yang sedang terpilih, opsional.
- * @param {SelectOption[]} props.options - Daftar opsi yang tersedia.
+ * @param {SelectOption[]} props.options - Daftar opsi, termasuk ikon dan warna visual opsional.
  * @param {(value: string) => void} props.onChange - Dijalankan dengan nilai opsi yang baru dipilih.
  * @param {string} props.placeholder - Teks saat belum ada opsi terpilih, default `Pilih opsi`.
  * @param {string} props.searchPlaceholder - Teks pada kolom pencarian, default `Cari...`.
@@ -178,6 +183,8 @@ export function Input({ label, errors, hint, className = '', ...rest }: InputOwn
  * @param {boolean} props.regexSearch - Perlakukan kata kunci sebagai regex bila true, default true.
  * @param {string} props.name - Nama input tersembunyi untuk pengiriman form native, opsional.
  * @param {string} props.className - Kelas tambahan yang digabung ke kelas bawaan.
+ * @param {boolean} props.hideLabel - Sembunyikan label secara visual tetapi pertahankan untuk pembaca layar.
+ * @param {boolean} props.compact - Gunakan tinggi kontrol yang lebih ringkas untuk toolbar.
  * @returns {ReactNode} Field pilihan beserta daftar opsinya.
  */
 export function Select({
@@ -194,6 +201,8 @@ export function Select({
   regexSearch = true,
   name,
   className = '',
+  hideLabel = false,
+  compact = false,
 }: SelectOwnProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
 
@@ -236,7 +245,7 @@ export function Select({
   }
 
   return (
-    <FieldShell label={label} errors={errors} hint={hint}>
+    <FieldShell label={label} errors={errors} hint={hint} hideLabel={hideLabel}>
       <div ref={wrapperRef} className={`relative ${className}`}>
         {name && <input type="hidden" name={name} value={value ?? ''} />}
 
@@ -248,11 +257,18 @@ export function Select({
           }}
           aria-haspopup="listbox"
           aria-expanded={open}
-          className={`flex w-full items-center justify-between gap-3 rounded-xl border bg-white px-4 py-3 text-left outline-none transition-all duration-200 ${
+          className={`flex w-full items-center justify-between gap-3 rounded-xl border bg-white text-left outline-none transition-all duration-200 ${compact ? 'px-3 py-2.5' : 'px-4 py-3'} ${
             errors?.length ? 'border-red-300 focus:border-red-400' : open ? 'border-theme-accent ring-2 ring-theme-accent/10' : 'border-gray-200 hover:border-gray-300'
           } ${disabled ? 'cursor-not-allowed bg-gray-50 text-gray-400' : 'cursor-pointer'}`}
         >
-          <span className={`min-w-0 flex-1 truncate text-sm ${selectedOption ? 'font-medium text-gray-800' : 'text-gray-400'}`}>{selectedOption?.label ?? placeholder}</span>
+          <span className={`flex min-w-0 flex-1 items-center gap-2 text-sm ${selectedOption ? 'font-medium text-gray-800' : 'text-gray-400'}`}>
+            {selectedOption && (selectedOption.icon || selectedOption.color) && (
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-gray-700" style={{ backgroundColor: selectedOption.color ?? '#F1F1F1' }}>
+                {selectedOption.icon && <DynamicIcon icon={selectedOption.icon} fontSize="13px" />}
+              </span>
+            )}
+            <span className="truncate">{selectedOption?.label ?? placeholder}</span>
+          </span>
 
           <DynamicIcon icon="ph:caret-down" fontSize="16px" className={`shrink-0 text-gray-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
         </button>
@@ -306,6 +322,12 @@ export function Select({
                         _option.disabled ? 'cursor-not-allowed opacity-40' : ''
                       }`}
                     >
+                      {(_option.icon || _option.color) && (
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-gray-700" style={{ backgroundColor: _option.color ?? '#F1F1F1' }}>
+                          {_option.icon && <DynamicIcon icon={_option.icon} fontSize="15px" />}
+                        </span>
+                      )}
+
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium">{_option.label}</p>
 
